@@ -111,13 +111,25 @@ Section ::= id:byte + size:u32 + content:byte[size]
 
 ### 2.2 Section 排序规则
 
-**关键规则**：除 Custom Section（id=0）外，所有已知 Section 必须按 ID **严格递增**顺序出现，且每种最多出现一次。Custom Section 可以出现在任意位置、任意次数。
+**关键规则**：除 Custom Section（id=0）外，所有已知 Section 每种最多出现一次，且必须按规定顺序出现。Custom Section 可以出现在任意位置、任意次数。
 
 > **wasm3 实现参考**：[m3_parse.c - ParseModuleSection()](wasm3/source/m3_parse.c#L570) — Section 分发表，根据 section id 调用对应的解析函数；[m3_parse.c#L636](wasm3/source/m3_parse.c#L636) — `sectionsOrder` 数组实现 Section 排序检查。
 
 ```
 [Custom]* [Type]? [Custom]* [Import]? [Custom]* [Function]? [Custom]* ...
 ```
+
+> **⚠️ DataCount 例外**：大部分 Section 按 ID 严格递增排列，但 **DataCount Section（id=12）是一个例外**——它的 ID 虽然是 12（大于 Code 的 10 和 Data 的 11），但规范要求它必须出现在 **Code Section（id=10）之前**。这是因为 DataCount 是后来通过 Bulk Memory 提案添加的，ID 号按添加时间分配（排在已有 Section 之后），但其**物理位置**必须在 Code Section 之前才能发挥单遍验证的作用。实际的 Section 排列顺序为：
+>
+> ```
+> ... → Element(9) → DataCount(12) → Code(10) → Data(11)
+> ```
+>
+> wasm3 的 `sectionsOrder` 数组直接体现了这一点：
+>
+> ```c
+> static const u8 sectionsOrder[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 10, 11, 0 };
+> ```
 
 > **CLR 类比**：CLR 的 PE 文件中，各 Section（.text/.rsrc/.reloc）的顺序也有约定，但 CLR 元数据表（TypeDef/MethodDef/Field 等）的排列更像是一个关系数据库的多张表，通过 token 索引互相引用。Wasm 的 Section 设计更像是一个线性流，解析器可以单遍顺序读取。
 
@@ -708,13 +720,38 @@ data    ::= 0x00 offset:expr init:vec(byte)     // active, memory 0
 datacountsec ::= count:u32
 ```
 
-**为什么需要它？** 在验证 Code Section 中的 `memory.init` 和 `data.drop` 指令时，验证器需要知道数据段的数量来检查索引是否越界。但 Data Section 在 Code Section **之后**。DataCount Section（id=12）放在 Code Section（id=10）**之前**，解决了这个前向引用问题。
+**为什么需要它？** 在验证 Code Section 中的 `memory.init` 和 `data.drop` 指令时，验证器需要知道数据段的数量来检查索引是否越界。但 Data Section（id=11）在 Code Section（id=10）**之后**。DataCount Section（id=12）虽然 ID 最大，但规范要求它放在 Code Section **之前**（详见 [2.2 节排序规则](#22-section-排序规则)），从而解决了这个前向引用问题。
 
 ```
 0x0C                    // DataCount Section id
 0x01                    // section size = 1
 0x03                    // data segment count = 3
 ```
+
+> **注意**：section size 不是固定为 1。`count` 是 LEB128 编码的 `u32`，当数量 ≥ 128 时编码会占用多个字节，section size 也会相应增大（例如 count=200 时 LEB128 编码为 2 字节，section size=2）。
+
+**DataCount 如何帮助单遍验证**：
+
+DataCount Section 本质上是 Data Section 中 `vec(data)` 的 count 字段的一个**前置副本**。由于它排在 Code Section 之前，验证器在解析函数体时就能立即检查 `dataidx` 是否越界，无需等到 Data Section：
+
+```
+解析顺序：
+
+┌──────────────┐     ┌──────────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Element (9)  │ ──→ │ DataCount (12)   │ ──→ │  Code (10)   │ ──→ │  Data (11)   │
+│              │     │ count = 3        │     │ memory.init 5│     │ 3 segments   │
+└──────────────┘     └───────┬──────────┘     └──────┬───────┘     └──────────────┘
+                             │                       │
+                             │    "有几个 data seg?" │
+                             └───────────────────────┘
+                                  回答：3 个
+                                  5 >= 3 → 越界！验证失败
+```
+
+- **没有 DataCount 时**：解析到 Code Section 遇到 `memory.init 5`，想检查 `dataidx=5` 是否越界，但 Data Section 还没解析到，不知道有几个 data segment。要么放弃单遍验证，要么先跳到 Data Section 数一下再回来。
+- **有 DataCount 时**：解析到 DataCount Section 记录 `data_count=3`，随后解析 Code Section 遇到 `memory.init 5`，查 `data_count=3`，`5 >= 3` → 越界，立即报错。单遍验证完成。
+
+**一致性要求**：如果存在 DataCount Section，其声明的数量必须**精确等于** Data Section 中实际的 data segment 数量，否则模块验证失败（invalid module）。
 
 ---
 
