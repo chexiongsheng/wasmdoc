@@ -2,7 +2,7 @@
 
 > LEB128（Little Endian Base 128）是 WebAssembly 二进制格式中最基础的编码方式。几乎所有的整数值——Section ID、类型索引、函数索引、指令立即数、向量长度等——都使用 LEB128 编码。在实现 Wasm 解析器之前，你必须先搞定它。
 >
-> **wasm3 源码参考**：[m3_core.c - ReadLebUnsigned()](../wasm3/source/m3_core.c#L356) — 无符号 LEB128 解码；[m3_core.c - ReadLebSigned()](../wasm3/source/m3_core.c#L390) — 有符号 LEB128 解码；[m3_core.c - ReadLEB_u32()](../wasm3/source/m3_core.c#L435) / [ReadLEB_i32()](../wasm3/source/m3_core.c#L465) / [ReadLEB_i64()](../wasm3/source/m3_core.c#L475) — 便捷包装函数；[m3_core.h#L291](../wasm3/source/m3_core.h#L291) — 函数声明。
+> **wasm3 源码参考**：[m3_core.c - ReadLebUnsigned()](../wasm3/source/m3_core.c#L356) — 无符号 LEB128 解码；[m3_core.c - ReadLebSigned()](../wasm3/source/m3_core.c#L392) — 有符号 LEB128 解码；[m3_core.c - ReadLEB_u32()](../wasm3/source/m3_core.c#L435) / [ReadLEB_i32()](../wasm3/source/m3_core.c#L465) / [ReadLEB_i64()](../wasm3/source/m3_core.c#L475) — 便捷包装函数；[m3_core.h#L291](../wasm3/source/m3_core.h#L291) — 函数声明。
 
 ## 1. 为什么用 LEB128？
 

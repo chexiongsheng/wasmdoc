@@ -284,7 +284,7 @@ op_i32_add: {
 
 ### 2.3 策略三：Threaded Code（wasm3 的 M3 方式）
 
-> **wasm3 实现参考**：[m3_exec_defs.h - d_m3OpSig](wasm3/source/m3_exec_defs.h#L17) — M3 operation 的统一函数签名；[m3_exec_defs.h - nextOpDirect](wasm3/source/m3_exec_defs.h#L62) — 尾调用分发宏；[m3_exec.h](wasm3/source/m3_exec.h) — 所有 M3 operation 的实现。
+> **wasm3 实现参考**：[m3_exec_defs.h - d_m3OpSig](wasm3/source/m3_exec_defs.h#L33) — M3 operation 的统一函数签名；[m3_exec_defs.h - nextOpDirect](wasm3/source/m3_exec_defs.h#L62) — 尾调用分发宏；[m3_exec.h](wasm3/source/m3_exec.h) — 所有 M3 operation 的实现。
 
 wasm3 采用了一种更激进的方式：在加载时将 Wasm 字节码**编译**为一个 C 函数指针数组（threaded code），运行时通过函数指针链式调用执行。
 
@@ -364,7 +364,7 @@ d_m3Op(Add_i32) {
 
 ### 3.1 操作数栈（Value Stack）
 
-> **wasm3 实现参考**：[m3_env.h - M3Runtime](wasm3/source/m3_env.h#L159) — `stack` 字段为运行时操作数栈；[m3_core.h#L36](wasm3/source/m3_core.h#L36) — `m3slot_t` 定义为 `uint64_t`，即 8 字节无类型标签栈槽。
+> **wasm3 实现参考**：[m3_env.h - M3Runtime](wasm3/source/m3_env.h#L161) — `stack` 字段为运行时操作数栈；[m3_core.h#L36](wasm3/source/m3_core.h#L36) — `m3slot_t` 定义为 `uint64_t`，即 8 字节无类型标签栈槽。
 
 Wasm 是栈式虚拟机，操作数栈是最核心的数据结构。
 
@@ -552,7 +552,7 @@ block:                          loop:
 
 ### 3.4 线性内存（Linear Memory）
 
-> **wasm3 实现参考**：[m3_env.h - M3Memory](wasm3/source/m3_env.h#L28) — 内存结构定义；[m3_env.c - ResizeMemory()](wasm3/source/m3_env.c#L262) — 内存增长实现；[m3_core.h - M3MemoryHeader](wasm3/source/m3_core.h#L123) — 内存头部结构。
+> **wasm3 实现参考**：[m3_env.h - M3Memory](wasm3/source/m3_env.h#L20) — 内存结构定义；[m3_env.c - ResizeMemory()](wasm3/source/m3_env.c#L353) — 内存增长实现；[m3_core.h - M3MemoryHeader](wasm3/source/m3_core.h#L132) — 内存头部结构。
 
 ```c
 typedef struct {
@@ -602,7 +602,7 @@ typedef struct {
 
 ### 3.7 模块实例（Module Instance）—— 汇总
 
-> **wasm3 实现参考**：[m3_env.h - M3Module](wasm3/source/m3_env.h#L82) — 模块结构（包含函数/全局变量/导入导出等）；[m3_env.h - M3Runtime](wasm3/source/m3_env.h#L159) — 运行时结构（包含栈/内存/模块链表）；[m3_env.h - M3Environment](wasm3/source/m3_env.h#L139) — 环境结构（全局类型去重）。
+> **wasm3 实现参考**：[m3_env.h - M3Module](wasm3/source/m3_env.h#L82) — 模块结构（包含函数/全局变量/导入导出等）；[m3_env.h - M3Runtime](wasm3/source/m3_env.h#L161) — 运行时结构（包含栈/内存/模块链表）；[m3_env.h - M3Environment](wasm3/source/m3_env.h#L140) — 环境结构（全局类型去重）。
 
 ```c
 typedef struct ModuleInstance {
@@ -651,7 +651,7 @@ typedef struct FuncInstance {
 
 ### 4.1 直接调用（call）
 
-> **wasm3 实现参考**：[m3_compile.c - Compile_Call()](wasm3/source/m3_compile.c#L1705) — 编译阶段处理 `call` 指令；[m3_exec.h - op_Call()](wasm3/source/m3_exec.h#L554) — 运行时直接调用实现；[m3_exec.h - op_Entry()](wasm3/source/m3_exec.h#L1168) — 函数入口（分配局部变量、检查栈溢出）。
+> **wasm3 实现参考**：[m3_compile.c - Compile_Call()](wasm3/source/m3_compile.c#L1659) — 编译阶段处理 `call` 指令；[m3_exec.h - op_Call()](wasm3/source/m3_exec.h#L542) — 运行时直接调用实现；[m3_exec.h - op_Entry()](wasm3/source/m3_exec.h#L802) — 函数入口（分配局部变量、检查栈溢出）。
 
 `call` 指令的立即数是函数索引。执行流程：
 
@@ -698,7 +698,7 @@ case OP_CALL: {
 
 ### 4.2 间接调用（call_indirect）
 
-> **wasm3 实现参考**：[m3_exec.h - op_CallIndirect()](wasm3/source/m3_exec.h#L580) — 运行时间接调用实现（包含表越界检查、类型匹配检查）。
+> **wasm3 实现参考**：[m3_exec.h - op_CallIndirect()](wasm3/source/m3_exec.h#L568) — 运行时间接调用实现（包含表越界检查、类型匹配检查）。
 
 `call_indirect` 通过表（table）进行间接函数调用，类似 C 的函数指针调用。
 
@@ -826,7 +826,7 @@ void branch_to(InterpState *state, uint32_t depth, ...) {
 
 ### 4.5 宿主函数调用（Host Function Call）
 
-> **wasm3 实现参考**：[m3_exec.h - op_CallRawFunction()](wasm3/source/m3_exec.h#L629) — 调用原始宿主函数；[wasm3.h - M3RawCall](wasm3/source/wasm3.h#L233) — 宿主函数回调类型定义；[wasm3.h - m3ApiRawFunction](wasm3/source/wasm3.h#L340) — 宿主函数声明宏。
+> **wasm3 实现参考**：[m3_exec.h - op_CallRawFunction()](wasm3/source/m3_exec.h#L623) — 调用原始宿主函数；[wasm3.h - M3RawCall](wasm3/source/wasm3.h#L253) — 宿主函数回调类型定义；[wasm3.h - m3ApiRawFunction](wasm3/source/wasm3.h#L346) — 宿主函数声明宏。
 
 宿主函数是由嵌入环境（C/C++ 程序）提供的函数，通过 import 机制绑定。
 
@@ -965,7 +965,7 @@ case OP_I32_LOAD8_U: {
 
 ### 5.4 memory.grow 实现
 
-> **wasm3 实现参考**：[m3_exec.h - op_MemGrow()](wasm3/source/m3_exec.h#L725) — 运行时 `memory.grow` 指令实现；[m3_env.c - ResizeMemory()](wasm3/source/m3_env.c#L262) — 实际的内存重分配逻辑。
+> **wasm3 实现参考**：[m3_exec.h - op_MemGrow()](wasm3/source/m3_exec.h#L706) — 运行时 `memory.grow` 指令实现；[m3_env.c - ResizeMemory()](wasm3/source/m3_env.c#L353) — 实际的内存重分配逻辑。
 
 ```c
 case OP_MEMORY_GROW: {
@@ -1216,7 +1216,7 @@ M3 Code Page (array of slots):
 
 ### 8.3 M3 Operation 的执行模型
 
-> **wasm3 实现参考**：[m3_exec_defs.h - d_m3OpSig](wasm3/source/m3_exec_defs.h#L17) — operation 函数签名宏；[m3_exec_defs.h - nextOpDirect](wasm3/source/m3_exec_defs.h#L62) — 尾调用分发宏；[m3_exec_defs.h - RunCode](wasm3/source/m3_exec_defs.h#L66) — trampoline 入口。
+> **wasm3 实现参考**：[m3_exec_defs.h - d_m3OpSig](wasm3/source/m3_exec_defs.h#L33) — operation 函数签名宏；[m3_exec_defs.h - nextOpDirect](wasm3/source/m3_exec_defs.h#L62) — 尾调用分发宏；[m3_exec_defs.h - RunCode](wasm3/source/m3_exec_defs.h#L66) — trampoline 入口。
 
 ```c
 // Simplified M3 operation signature
@@ -1266,7 +1266,7 @@ d_m3Op(GetLocal_i32) {
 
 ### 8.4 编译阶段：Wasm → M3
 
-> **wasm3 实现参考**：[m3_compile.c - CompileFunction()](wasm3/source/m3_compile.c#L2832) — 函数编译入口；[m3_compile.c - CompileBlockStatements()](wasm3/source/m3_compile.c#L2649) — 逐条编译指令；[m3_compile.c - EmitOp()](wasm3/source/m3_compile.c#L55) — 发射 M3 operation 到 code page；[m3_compile.c - c_operations](wasm3/source/m3_compile.c#L2047) — 操作码到 M3OpInfo 的映射表。
+> **wasm3 实现参考**：[m3_compile.c - CompileFunction()](wasm3/source/m3_compile.c#L2841) — 函数编译入口；[m3_compile.c - CompileBlockStatements()](wasm3/source/m3_compile.c#L2568) — 逐条编译指令；[m3_compile.c - EmitOp()](wasm3/source/m3_compile.c#L55) — 发射 M3 operation 到 code page；[m3_compile.c - c_operations](wasm3/source/m3_compile.c#L2260) — 操作码到 M3OpInfo 的映射表。
 
 wasm3 的编译器（`m3_compile.c`）逐条读取 Wasm 操作码，为每条指令生成对应的 M3 operation：
 
@@ -1335,7 +1335,7 @@ d_m3Op(Add_i32_rs) {
 
 ### 8.6 M3 的控制流处理
 
-> **wasm3 实现参考**：[m3_exec.h - op_Branch()](wasm3/source/m3_exec.h#L1240) — 无条件跳转；[m3_exec.h - op_BranchTable()](wasm3/source/m3_exec.h#L1275) — 分支表；[m3_exec.h - op_Loop()](wasm3/source/m3_exec.h#L1218) — 循环入口；[m3_compile.c - Compile_If()](wasm3/source/m3_compile.c#L1869) — if/else 编译；[m3_compile.c - Compile_LoopOrBlock()](wasm3/source/m3_compile.c#L1812) — block/loop 编译。
+> **wasm3 实现参考**：[m3_exec.h - op_Branch()](wasm3/source/m3_exec.h#L898) — 无条件跳转；[m3_exec.h - op_BranchTable()](wasm3/source/m3_exec.h#L930) — 分支表；[m3_exec.h - op_Loop()](wasm3/source/m3_exec.h#L864) — 循环入口；[m3_compile.c - Compile_If()](wasm3/source/m3_compile.c#L1927) — if/else 编译；[m3_compile.c - Compile_LoopOrBlock()](wasm3/source/m3_compile.c#L1851) — block/loop 编译。
 
 M3 中的控制流通过在 code page 中嵌入跳转目标来实现：
 

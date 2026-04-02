@@ -831,7 +831,7 @@ WasmError call_indirect(WasmInterp *interp, uint32_t type_idx, uint32_t table_id
 
 ## 6. 阶段 5：导入/导出与宿主函数绑定
 
-> **wasm3 参考实现**：[m3_bind.c](wasm3/source/m3_bind.c) — 宿主函数绑定实现；[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L430) — 模块加载与导入解析；[m3_api_wasi.c - m3_LinkWASI()](wasm3/source/m3_api_wasi.c#L772) — WASI 宿主函数注册示例。
+> **wasm3 参考实现**：[m3_bind.c](wasm3/source/m3_bind.c) — 宿主函数绑定实现；[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L596) — 模块加载与导入解析；[m3_api_wasi.c - m3_LinkWASI()](wasm3/source/m3_api_wasi.c#L784) — WASI 宿主函数注册示例。
 
 ### 6.1 目标
 

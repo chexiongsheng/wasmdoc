@@ -14,7 +14,7 @@
 
 ## 1. 控制流指令（Control Instructions）
 
-> **wasm3 实现参考**：编译阶段见 [m3_compile.c - Compile_LoopOrBlock()](../wasm3/source/m3_compile.c#L1812)、[Compile_If()](../wasm3/source/m3_compile.c#L1869)、[Compile_Branch()](../wasm3/source/m3_compile.c#L1533)、[Compile_Call()](../wasm3/source/m3_compile.c#L1705)；运行时见 [m3_exec.h - op_Loop()](../wasm3/source/m3_exec.h#L1218)、[op_Branch()](../wasm3/source/m3_exec.h#L1240)、[op_BranchTable()](../wasm3/source/m3_exec.h#L1275)、[op_Call()](../wasm3/source/m3_exec.h#L554)、[op_CallIndirect()](../wasm3/source/m3_exec.h#L580)。
+> **wasm3 实现参考**：编译阶段见 [m3_compile.c - Compile_LoopOrBlock()](../wasm3/source/m3_compile.c#L1851)、[Compile_If()](../wasm3/source/m3_compile.c#L1869)、[Compile_Branch()](../wasm3/source/m3_compile.c#L1533)、[Compile_Call()](../wasm3/source/m3_compile.c#L1705)；运行时见 [m3_exec.h - op_Loop()](../wasm3/source/m3_exec.h#L864)、[op_Branch()](../wasm3/source/m3_exec.h#L1240)、[op_BranchTable()](../wasm3/source/m3_exec.h#L1275)、[op_Call()](../wasm3/source/m3_exec.h#L554)、[op_CallIndirect()](../wasm3/source/m3_exec.h#L580)。
 
 这是 Wasm 最独特的部分——结构化控制流。与 CIL 的任意偏移跳转不同，Wasm 的跳转目标只能是嵌套块的边界。
 
@@ -63,7 +63,7 @@
 
 ## 4. 变量指令（Variable Instructions）
 
-> **wasm3 实现参考**：编译阶段见 [m3_compile.c - Compile_GetLocal()](../wasm3/source/m3_compile.c#L1299)、[Compile_SetLocal()](../wasm3/source/m3_compile.c#L1327)；全局变量见 [m3_compile.c - Compile_GetSetGlobal()](../wasm3/source/m3_compile.c#L1388)。
+> **wasm3 实现参考**：编译阶段见 [m3_compile.c - Compile_GetLocal()](../wasm3/source/m3_compile.c#L1322)、[Compile_SetLocal()](../wasm3/source/m3_compile.c#L1327)；全局变量见 [m3_compile.c - Compile_GetSetGlobal()](../wasm3/source/m3_compile.c#L1383)。
 
 | 操作码 | 助记符 | 立即数 | 栈签名 | 语义 |
 |--------|--------|--------|--------|------|
@@ -92,7 +92,7 @@
 
 ## 6. 内存指令（Memory Instructions）
 
-> **wasm3 实现参考**：[m3_exec.h - d_m3Load](../wasm3/source/m3_exec.h#L1321) — load 操作宏（生成所有 load 变体）；[m3_exec.h - d_m3Store](../wasm3/source/m3_exec.h#L1390) — store 操作宏（生成所有 store 变体）；[m3_exec.h - op_MemSize()](../wasm3/source/m3_exec.h#L716)、[op_MemGrow()](../wasm3/source/m3_exec.h#L725) — 内存管理指令；[m3_compile.c - Compile_Load_Store()](../wasm3/source/m3_compile.c#L2205) — load/store 编译。
+> **wasm3 实现参考**：[m3_exec.h - d_m3Load](../wasm3/source/m3_exec.h#L1321) — load 操作宏（生成所有 load 变体）；[m3_exec.h - d_m3Store](../wasm3/source/m3_exec.h#L1390) — store 操作宏（生成所有 store 变体）；[m3_exec.h - op_MemSize()](../wasm3/source/m3_exec.h#L696)、[op_MemGrow()](../wasm3/source/m3_exec.h#L725) — 内存管理指令；[m3_compile.c - Compile_Load_Store()](../wasm3/source/m3_compile.c#L2200) — load/store 编译。
 
 ### 6.1 加载指令
 
@@ -212,7 +212,7 @@
 
 ### 7.6 i32 算术与位运算指令
 
-> **wasm3 实现参考**：所有 i32 算术运算的 M3 operation 实现见 [m3_exec.h](../wasm3/source/m3_exec.h)，通过 `d_m3CommutativeOp_i`/`d_m3Op_i` 等宏批量生成。例如除法和取余包含除零检查：[m3_exec.h - op_Divide_i32()](../wasm3/source/m3_exec.h#L260)。
+> **wasm3 实现参考**：所有 i32 算术运算的 M3 operation 实现见 [m3_exec.h](../wasm3/source/m3_exec.h)，通过 `d_m3CommutativeOp_i`/`d_m3Op_i` 等宏批量生成。例如除法和取余包含除零检查：[m3_exec.h - d_m3OpMacro_i(i32, Divide)](../wasm3/source/m3_exec.h#L241)。
 
 | 操作码 | 助记符 | 栈签名 | 语义 |
 |--------|--------|--------|------|
@@ -298,7 +298,7 @@
 
 ### 7.10 类型转换指令
 
-> **wasm3 实现参考**：截断转换（可能 trap）见 [m3_exec.h - d_m3TruncMacro](../wasm3/source/m3_exec.h#L395) — 包含溢出和 NaN 检查的截断宏；位模式重解释通过 C 类型双关实现。
+> **wasm3 实现参考**：截断转换（可能 trap）见 [m3_exec.h - d_m3TruncMacro](../wasm3/source/m3_exec.h#L353) — 包含溢出和 NaN 检查的截断宏；位模式重解释通过 C 类型双关实现。
 
 这是实现中容易出错的部分，特别注意 trap 条件和 saturating 变体的区别。
 
@@ -348,7 +348,7 @@
 
 ### 8.1 饱和截断指令（Nontrapping Float-to-Int Conversions）
 
-> **wasm3 实现参考**：饱和截断变体见 [m3_exec.h - d_m3TruncSatMacro](../wasm3/source/m3_exec.h#L395) — 溢出时返回最近可表示值而非 trap。
+> **wasm3 实现参考**：饱和截断变体见 [m3_exec.h - d_m3TruncMacro(TruncSat)](../wasm3/source/m3_exec.h#L390) — 溢出时返回最近可表示值而非 trap。
 
 与普通 trunc 不同，这些指令在溢出时**不 trap**，而是返回最近的可表示值。
 
@@ -375,7 +375,7 @@
 
 ### 9.1 解码策略
 
-> **wasm3 实现参考**：[m3_compile.c - CompileBlockStatements()](../wasm3/source/m3_compile.c#L2649) — 主解码循环，逐条读取操作码并分发到对应的编译函数；[m3_compile.c - GetOpInfo()](../wasm3/source/m3_compile.c#L2554) — 操作码到 M3OpInfo 的查找（含 0xFC 前缀二级分发）。
+> **wasm3 实现参考**：[m3_compile.c - CompileBlockStatements()](../wasm3/source/m3_compile.c#L2568) — 主解码循环，逐条读取操作码并分发到对应的编译函数；[m3_compile.c - GetOpInfo()](../wasm3/source/m3_compile.c#L2550) — 操作码到 M3OpInfo 的查找（含 0xFC 前缀二级分发）。
 
 ```
 // Pseudocode: instruction decoder main loop

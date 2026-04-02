@@ -77,7 +77,7 @@ m3_Call() / m3_CallV()    ← Execute the M3 threaded code
 
 ### 2.1 M3Environment
 
-> **源码位置**：[m3_env.h#L139](wasm3/source/m3_env.h#L139) — 结构定义；[m3_env.c - m3_NewEnvironment()](wasm3/source/m3_env.c#L18) — 创建；[m3_env.c - Environment_AddFuncType()](wasm3/source/m3_env.c#L89) — 类型去重注册。
+> **源码位置**：[m3_env.h#L139](wasm3/source/m3_env.h#L139) — 结构定义；[m3_env.c - m3_NewEnvironment()](wasm3/source/m3_env.c#L17) — 创建；[m3_env.c - Environment_AddFuncType()](wasm3/source/m3_env.c#L87) — 类型去重注册。
 
 ```c
 typedef struct M3Environment {
@@ -94,7 +94,7 @@ M3Environment;
 
 ### 2.2 M3Runtime
 
-> **源码位置**：[m3_env.h#L159](wasm3/source/m3_env.h#L159) — 结构定义；[m3_env.c - m3_NewRuntime()](wasm3/source/m3_env.c#L153) — 创建；[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L430) — 加载模块。
+> **源码位置**：[m3_env.h#L159](wasm3/source/m3_env.h#L161) — 结构定义；[m3_env.c - m3_NewRuntime()](wasm3/source/m3_env.c#L173) — 创建；[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L596) — 加载模块。
 
 ```c
 typedef struct M3Runtime {
@@ -196,7 +196,7 @@ M3Function;
 
 ### 2.5 M3Compilation（编译状态）
 
-> **源码位置**：[m3_compile.h#L78](wasm3/source/m3_compile.h#L78) — `M3Compilation` 结构定义；[m3_compile.h#L60](wasm3/source/m3_compile.h#L60) — `M3CompilationScope` 控制流作用域；[m3_compile.h#L126](wasm3/source/m3_compile.h#L126) — `M3OpInfo` 操作码信息结构。
+> **源码位置**：[m3_compile.h#L78](wasm3/source/m3_compile.h#L54) — `M3Compilation` 结构定义；[m3_compile.h#L60](wasm3/source/m3_compile.h#L60) — `M3CompilationScope` 控制流作用域；[m3_compile.h#L126](wasm3/source/m3_compile.h#L126) — `M3OpInfo` 操作码信息结构。
 
 ```c
 typedef struct M3Compilation {
@@ -236,7 +236,7 @@ M3Compilation;
 
 ### 3.1 解析入口
 
-> **源码位置**：[m3_parse.c - m3_ParseModule()](wasm3/source/m3_parse.c#L598) — 解析入口；[m3_parse.c - ParseModuleSection()](wasm3/source/m3_parse.c#L519) — Section 分发表。
+> **源码位置**：[m3_parse.c - m3_ParseModule()](wasm3/source/m3_parse.c#L612) — 解析入口；[m3_parse.c - ParseModuleSection()](wasm3/source/m3_parse.c#L570) — Section 分发表。
 
 ```c
 M3Result m3_ParseModule(IM3Environment env, IM3Module* o_module,
@@ -357,7 +357,7 @@ d_m3Op(i32_Add) {
 
 ### 4.2 编译入口与流程
 
-> **源码位置**：[m3_compile.c - CompileFunction()](wasm3/source/m3_compile.c#L2832) — 函数编译入口；[m3_compile.c - CompileBlock()](wasm3/source/m3_compile.c#L2716) — 编译一个代码块；[m3_compile.c - CompileBlockStatements()](wasm3/source/m3_compile.c#L2649) — 逐条编译指令。
+> **源码位置**：[m3_compile.c - CompileFunction()](wasm3/source/m3_compile.c#L2841) — 函数编译入口；[m3_compile.c - CompileBlock()](wasm3/source/m3_compile.c#L2656) — 编译一个代码块；[m3_compile.c - CompileBlockStatements()](wasm3/source/m3_compile.c#L2568) — 逐条编译指令。
 
 编译的入口是 `Compile_Function`：
 
@@ -431,7 +431,7 @@ M3Result CompileBlock(M3Compilation* c, IM3FuncType blockType, m3opcode_t blockO
 
 ### 4.4 操作码到编译函数的映射
 
-> **源码位置**：[m3_compile.c - c_operations字段](wasm3/source/m3_compile.c#L2047) — 完整的操作码到 `M3OpInfo` 的映射表（包含栈偏移、类型、operation 函数指针、编译器函数）。
+> **源码位置**：[m3_compile.c - c_operations](wasm3/source/m3_compile.c#L2260) — 完整的操作码到 `M3OpInfo` 的映射表（包含栈偏移、类型、operation 函数指针、编译器函数）。
 
 wasm3 使用一个静态表 `c_operations[]` 将每个 Wasm 操作码映射到其编译函数：
 
@@ -460,7 +460,7 @@ const M3OpInfo c_operations[] = {
 
 ### 4.5 代码发射（Code Emission）
 
-> **源码位置**：[m3_compile.c - EmitOp()](wasm3/source/m3_compile.c#L55) — 发射一个 operation 函数指针；[m3_code.c - EmitWord_impl()](wasm3/source/m3_code.c#L86) — 向 code page 写入一个 word；[m3_code.c - GetPagePC()](wasm3/source/m3_code.c#L130) — 获取当前写入位置。
+> **源码位置**：[m3_compile.c - EmitOp()](wasm3/source/m3_compile.c#L55) — 发射一个 operation 函数指针；[m3_code.c - EmitWord_impl()](wasm3/source/m3_code.c#L95) — 向 code page 写入一个 word；[m3_code.c - GetPagePC()](wasm3/source/m3_code.c#L139) — 获取当前写入位置。
 
 编译函数通过 `EmitOp` 系列函数向代码页写入 M3 operation：
 
@@ -505,7 +505,7 @@ Code Page Memory:
 
 ### 4.6 编译时栈模拟与寄存器分配
 
-> **源码位置**：[m3_compile.c - Push()](wasm3/source/m3_compile.c#L437) — 编译时压栈；[m3_compile.c - Pop()](wasm3/source/m3_compile.c#L479) — 编译时出栈；[m3_compile.h - M3Compilation](wasm3/source/m3_compile.h#L78) — `wasmStack`/`typeStack`/`m3Slots`/`regStackIndexPlusOne` 等字段实现栈模拟和寄存器跟踪。
+> **源码位置**：[m3_compile.c - Push()](wasm3/source/m3_compile.c#L542) — 编译时压栈；[m3_compile.c - Pop()](wasm3/source/m3_compile.c#L584) — 编译时出栈；[m3_compile.h - M3Compilation](wasm3/source/m3_compile.h#L54) — `wasmStack`/`typeStack`/`m3Slots`/`regStackIndexPlusOne` 等字段实现栈模拟和寄存器跟踪。
 
 wasm3 在编译时维护一个**模拟栈**（compile-time stack），跟踪每个栈槽的类型和位置：
 
@@ -536,7 +536,7 @@ With reg:       _r0 = 42        spill _r0→slot  _r0 = slot + _r0
 
 ### 4.7 控制流编译
 
-> **源码位置**：[m3_compile.c - Compile_LoopOrBlock()](wasm3/source/m3_compile.c#L1812) — block/loop 编译；[m3_compile.c - Compile_If()](wasm3/source/m3_compile.c#L1869) — if/else 编译；[m3_compile.c - Compile_Branch()](wasm3/source/m3_compile.c#L1533) — br/br_if 编译。
+> **源码位置**：[m3_compile.c - Compile_LoopOrBlock()](wasm3/source/m3_compile.c#L1851) — block/loop 编译；[m3_compile.c - Compile_If()](wasm3/source/m3_compile.c#L1927) — if/else 编译；[m3_compile.c - Compile_Branch()](wasm3/source/m3_compile.c#L1424) — br/br_if 编译。
 
 控制流是编译中最复杂的部分。以 `block` 为例：
 
@@ -629,7 +629,7 @@ Final M3 code: [op_GetLocal_r][off0][op_i32Add_rs][off1][op_return]
 
 ### 5.1 Operation 的定义
 
-> **源码位置**：[m3_exec_defs.h - d_m3OpSig](wasm3/source/m3_exec_defs.h#L17) — 统一函数签名宏；[m3_exec.h](wasm3/source/m3_exec.h) — 所有 operation 实现。
+> **源码位置**：[m3_exec_defs.h - d_m3OpSig](wasm3/source/m3_exec_defs.h#L33) — 统一函数签名宏；[m3_exec.h](wasm3/source/m3_exec.h) — 所有 operation 实现。
 
 每个 M3 operation 都是一个 C 函数，使用 `d_m3Op` 宏定义：
 
@@ -729,7 +729,7 @@ d_m3Op(SetLocal_i)
 
 ### 5.5 内存访问操作
 
-> **源码位置**：[m3_exec.h#L1399](wasm3/source/m3_exec.h#L1399) — `d_m3Load` 宏（生成所有 load 变体）；[m3_exec.h#L1459](wasm3/source/m3_exec.h#L1459) — `d_m3Store` 宏（生成所有 store 变体）；[m3_exec.h - op_MemSize()](wasm3/source/m3_exec.h#L716) — `memory.size`；[m3_exec.h - op_MemGrow()](wasm3/source/m3_exec.h#L725) — `memory.grow`。
+> **源码位置**：[m3_exec.h#L1399](wasm3/source/m3_exec.h#L1399) — `d_m3Load` 宏（生成所有 load 变体）；[m3_exec.h#L1459](wasm3/source/m3_exec.h#L1459) — `d_m3Store` 宏（生成所有 store 变体）；[m3_exec.h - op_MemSize()](wasm3/source/m3_exec.h#L696) — `memory.size`；[m3_exec.h - op_MemGrow()](wasm3/source/m3_exec.h#L706) — `memory.grow`。
 
 线性内存操作需要进行边界检查：
 
@@ -754,7 +754,7 @@ d_m3Op(i32_Load)
 
 ### 5.6 函数调用
 
-> **源码位置**：[m3_exec.h - op_Call()](wasm3/source/m3_exec.h#L554) — 直接调用；[m3_exec.h - op_CallIndirect()](wasm3/source/m3_exec.h#L580) — 间接调用；[m3_exec.h - op_CallRawFunction()](wasm3/source/m3_exec.h#L629) — 宿主函数调用；[m3_exec.h - op_Entry()](wasm3/source/m3_exec.h#L1168) — 函数入口（分配局部变量、检查栈溢出）；[m3_exec.h - op_Return()](wasm3/source/m3_exec.h#L1349) — 函数返回。
+> **源码位置**：[m3_exec.h - op_Call()](wasm3/source/m3_exec.h#L542) — 直接调用；[m3_exec.h - op_CallIndirect()](wasm3/source/m3_exec.h#L568) — 间接调用；[m3_exec.h - op_CallRawFunction()](wasm3/source/m3_exec.h#L623) — 宿主函数调用；[m3_exec.h - op_Entry()](wasm3/source/m3_exec.h#L802) — 函数入口（分配局部变量、检查栈溢出）；[m3_exec.h - op_Return()](wasm3/source/m3_exec.h#L1154) — 函数返回。
 
 函数调用是最复杂的 operation 之一：
 
@@ -807,7 +807,7 @@ d_m3Op(CallIndirect)
 
 ### 5.7 Trap 处理
 
-> **源码位置**：[wasm3.h#L107](wasm3/source/wasm3.h#L107) — 所有错误码/trap 字符串定义（`m3Err_*`）；[m3_exec.h - op_Compile()](wasm3/source/m3_exec.h#L1147) — 懒编译入口（首次调用时触发编译）。
+> **源码位置**：[wasm3.h#L107](wasm3/source/wasm3.h#L107) — 所有错误码/trap 字符串定义（`m3Err_*`）；[m3_exec.h - op_Compile()](wasm3/source/m3_exec.h#L778) — 懒编译入口（首次调用时触发编译）。
 
 wasm3 使用 C 的返回值来传播 trap（而非 setjmp/longjmp）：
 
@@ -835,7 +835,7 @@ d_m3Op(i32_DivS)
 
 ### 6.1 代码页结构
 
-> **源码位置**：[m3_core.h - M3CodePageHeader](wasm3/source/m3_core.h#L131) — 页头结构定义；[m3_code.c - NewCodePage()](wasm3/source/m3_code.c#L15) — 创建新页；[m3_code.c - EmitWord_impl()](wasm3/source/m3_code.c#L86) — 写入一个 word；[m3_env.c - AcquireCodePageWithCapacity()](wasm3/source/m3_env.c#L601) — 获取有剩余容量的页。
+> **源码位置**：[m3_core.h - M3CodePageHeader](wasm3/source/m3_core.h#L142) — 页头结构定义；[m3_code.c - NewCodePage()](wasm3/source/m3_code.c#L15) — 创建新页；[m3_code.c - EmitWord_impl()](wasm3/source/m3_code.c#L95) — 写入一个 word；[m3_env.c - AcquireCodePageWithCapacity()](wasm3/source/m3_env.c#L1113) — 获取有剩余容量的页。
 
 M3 编译后的 threaded code 存储在**代码页（Code Page）**中：
 
@@ -877,7 +877,7 @@ Runtime
 
 ### 7.1 绑定机制
 
-> **源码位置**：[m3_bind.c - m3_LinkRawFunction()](wasm3/source/m3_bind.c#L168) — 绑定宿主函数的主要 API；[m3_bind.c - SignatureToFuncType()](wasm3/source/m3_bind.c#L29) — 解析签名字符串；[m3_bind.c - FindAndLinkFunction()](wasm3/source/m3_bind.c#L117) — 查找并链接导入函数。
+> **源码位置**：[m3_bind.c - m3_LinkRawFunction()](wasm3/source/m3_bind.c#L167) — 绑定宿主函数的主要 API；[m3_bind.c - SignatureToFuncType()](wasm3/source/m3_bind.c#L27) — 解析签名字符串；[m3_bind.c - FindAndLinkFunction()](wasm3/source/m3_bind.c#L123) — 查找并链接导入函数。
 
 wasm3 允许将 C 函数绑定为 Wasm 的导入函数：
 
@@ -942,7 +942,7 @@ d_m3Op(CallRawFunction)
 
 ### 8.1 统一栈设计
 
-> **源码位置**：[m3_env.h - M3Runtime](wasm3/source/m3_env.h#L159) — `stack` 和 `stackSize` 字段；[m3_env.c - m3_NewRuntime()](wasm3/source/m3_env.c#L153) — 栈分配逻辑。
+> **源码位置**：[m3_env.h - M3Runtime](wasm3/source/m3_env.h#L161) — `stack` 和 `stackSize` 字段；[m3_env.c - m3_NewRuntime()](wasm3/source/m3_env.c#L173) — 栈分配逻辑。
 
 wasm3 最独特的内存设计是**统一栈**——值栈和调用栈共享同一块内存：
 
@@ -964,7 +964,7 @@ Stack Memory Layout:
 
 ### 8.2 线性内存管理
 
-> **源码位置**：[m3_env.h - M3Memory](wasm3/source/m3_env.h#L28) — 内存结构；[m3_core.h - M3MemoryHeader](wasm3/source/m3_core.h#L123) — 内存头部（包含长度、maxStack 等）；[m3_env.c - ResizeMemory()](wasm3/source/m3_env.c#L262) — 内存增长实现。
+> **源码位置**：[m3_env.h - M3Memory](wasm3/source/m3_env.h#L20) — 内存结构；[m3_core.h - M3MemoryHeader](wasm3/source/m3_core.h#L132) — 内存头部（包含长度、maxStack 等）；[m3_env.c - ResizeMemory()](wasm3/source/m3_env.c#L353) — 内存增长实现。
 
 ```c
 typedef struct M3Memory {

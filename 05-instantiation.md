@@ -21,7 +21,7 @@
 
 ## 1. 概述：从字节到运行
 
-> **wasm3 实现参考**：完整的加载流程参见 [wasm3.h](wasm3/source/wasm3.h) 中的公共 API：[m3_NewEnvironment()](wasm3/source/m3_env.c#L18) → [m3_NewRuntime()](wasm3/source/m3_env.c#L153) → [m3_ParseModule()](wasm3/source/m3_parse.c#L598) → [m3_LoadModule()](wasm3/source/m3_env.c#L430) → [m3_FindFunction()](wasm3/source/m3_env.c#L505) → [m3_Call()](wasm3/source/m3_env.c#L536)。
+> **wasm3 实现参考**：完整的加载流程参见 [wasm3.h](wasm3/source/wasm3.h) 中的公共 API：[m3_NewEnvironment()](wasm3/source/m3_env.c#L18) → [m3_NewRuntime()](wasm3/source/m3_env.c#L153) → [m3_ParseModule()](wasm3/source/m3_parse.c#L598) → [m3_LoadModule()](wasm3/source/m3_env.c#L596) → [m3_FindFunction()](wasm3/source/m3_env.c#L734) → [m3_Call()](wasm3/source/m3_env.c#L536)。
 
 一个 `.wasm` 文件从加载到执行，需要经历以下阶段：
 
@@ -253,7 +253,7 @@ wasm3 采用的是方案 2 的变体，更加实用。
 
 ## 4. 导入解析（Import Resolution）
 
-> **wasm3 实现参考**：[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L430) — 加载模块时解析导入；[m3_bind.c - FindAndLinkFunction()](wasm3/source/m3_bind.c#L117) — 查找并链接导入函数；[m3_bind.c - m3_LinkRawFunction()](wasm3/source/m3_bind.c#L168) — 绑定宿主函数的公共 API。
+> **wasm3 实现参考**：[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L596) — 加载模块时解析导入；[m3_bind.c - FindAndLinkFunction()](wasm3/source/m3_bind.c#L123) — 查找并链接导入函数；[m3_bind.c - m3_LinkRawFunction()](wasm3/source/m3_bind.c#L167) — 绑定宿主函数的公共 API。
 
 ### 4.1 导入的结构
 
@@ -395,7 +395,7 @@ WasmError resolve_imports(Module* module, ExternVal* provided, uint32_t num_prov
 
 ## 5. 实例分配（Allocation）
 
-> **wasm3 实现参考**：[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L430) — 将解析后的模块加载到运行时，分配内存/全局变量等资源；[m3_env.c - ResizeMemory()](wasm3/source/m3_env.c#L262) — 内存实例分配与增长。
+> **wasm3 实现参考**：[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L596) — 将解析后的模块加载到运行时，分配内存/全局变量等资源；[m3_env.c - ResizeMemory()](wasm3/source/m3_env.c#L353) — 内存实例分配与增长。
 
 ### 5.1 函数实例
 
@@ -506,7 +506,7 @@ typedef struct {
 
 ### 5.5 初始化表达式求值
 
-> **wasm3 实现参考**：[m3_env.c - EvaluateExpression()](wasm3/source/m3_env.c#L210) — 求值初始化表达式（支持 `*.const`、`global.get`、`ref.func` 等）。
+> **wasm3 实现参考**：[m3_env.c - EvaluateExpression()](wasm3/source/m3_env.c#L253) — 求值初始化表达式（支持 `*.const`、`global.get`、`ref.func` 等）。
 
 初始化表达式是一个受限的指令序列，只允许以下指令：
 
@@ -569,7 +569,7 @@ Value eval_init_expr(ModuleInstance* inst, uint8_t* expr, uint32_t len) {
 
 ## 6. 初始化：Element 与 Data Segments
 
-> **wasm3 实现参考**：[m3_env.c - InitElements()](wasm3/source/m3_env.c#L340) — 初始化元素段（将函数引用填充到 table0）；[m3_env.c - InitDataSegments()](wasm3/source/m3_env.c#L316) — 初始化数据段（将数据复制到线性内存）。
+> **wasm3 实现参考**：[m3_env.c - InitElements()](wasm3/source/m3_env.c#L485) — 初始化元素段（将函数引用填充到 table0）；[m3_env.c - InitDataSegments()](wasm3/source/m3_env.c#L456) — 初始化数据段（将数据复制到线性内存）。
 
 ### 6.1 Element Segments
 
@@ -701,7 +701,7 @@ WasmError init_all_segments(ModuleInstance* inst) {
 
 ## 7. 导出机制（Exports）
 
-> **wasm3 实现参考**：[m3_env.c - m3_FindFunction()](wasm3/source/m3_env.c#L505) — 通过名称查找导出函数；[m3_env.c - m3_GetFunctionName()](wasm3/source/m3_env.c#L487) — 获取函数名称。
+> **wasm3 实现参考**：[m3_env.c - m3_FindFunction()](wasm3/source/m3_env.c#L734) — 通过名称查找导出函数；[m3_env.c - m3_GetFunctionName()](wasm3/source/m3_env.c#L523) — 获取函数名称。
 
 ### 7.1 导出的结构
 
@@ -767,7 +767,7 @@ if (main_fn && main_fn->type == EXTERN_FUNC) {
 
 ## 8. 宿主函数绑定（Host Functions）
 
-> **wasm3 实现参考**：[m3_bind.c - m3_LinkRawFunction()](wasm3/source/m3_bind.c#L168) — 绑定宿主函数的主要 API；[m3_bind.c - SignatureToFuncType()](wasm3/source/m3_bind.c#L29) — 将签名字符串（如 `"i(ii)"`）解析为 `M3FuncType`；[wasm3.h - m3_LinkRawFunctionEx()](wasm3/source/wasm3.h#L260) — 带 userdata 的绑定 API。
+> **wasm3 实现参考**：[m3_bind.c - m3_LinkRawFunction()](wasm3/source/m3_bind.c#L167) — 绑定宿主函数的主要 API；[m3_bind.c - SignatureToFuncType()](wasm3/source/m3_bind.c#L27) — 将签名字符串（如 `"i(ii)"`）解析为 `M3FuncType`；[wasm3.h - m3_LinkRawFunctionEx()](wasm3/source/wasm3.h#L261) — 带 userdata 的绑定 API。
 
 ### 8.1 设计模式
 
@@ -893,7 +893,7 @@ case OP_CALL:
 
 ## 9. WASI —— 系统接口标准
 
-> **wasm3 实现参考**：[m3_api_wasi.c - m3_LinkWASI()](wasm3/source/m3_api_wasi.c#L772) — 注册所有 WASI 函数的入口；[m3_api_wasi.c - m3_wasi_generic_fd_write()](wasm3/source/m3_api_wasi.c#L455) — `fd_write` 实现；[m3_api_wasi.c - m3_wasi_generic_fd_read()](wasm3/source/m3_api_wasi.c#L413) — `fd_read` 实现。
+> **wasm3 实现参考**：[m3_api_wasi.c - m3_LinkWASI()](wasm3/source/m3_api_wasi.c#L784) — 注册所有 WASI 函数的入口；[m3_api_wasi.c - m3_wasi_generic_fd_write()](wasm3/source/m3_api_wasi.c#L607) — `fd_write` 实现；[m3_api_wasi.c - m3_wasi_generic_fd_read()](wasm3/source/m3_api_wasi.c#L568) — `fd_read` 实现。
 
 ### 9.1 什么是 WASI
 
