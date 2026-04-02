@@ -193,6 +193,8 @@ const char *wasm_error_string(WasmError err);
 
 ## 2. 阶段 1：二进制解析器（Module Decoder）
 
+> **wasm3 参考实现**：[m3_parse.c](wasm3/source/m3_parse.c) — 完整的二进制解析器实现（~600 行），入口为 [m3_ParseModule()](wasm3/source/m3_parse.c#L598)。
+
 ### 2.1 目标
 
 实现一个完整的 `.wasm` 二进制文件解析器，能够将二进制字节流解码为内存中的模块结构体。
@@ -829,6 +831,8 @@ WasmError call_indirect(WasmInterp *interp, uint32_t type_idx, uint32_t table_id
 
 ## 6. 阶段 5：导入/导出与宿主函数绑定
 
+> **wasm3 参考实现**：[m3_bind.c](wasm3/source/m3_bind.c) — 宿主函数绑定实现；[m3_env.c - m3_LoadModule()](wasm3/source/m3_env.c#L430) — 模块加载与导入解析；[m3_api_wasi.c - m3_LinkWASI()](wasm3/source/m3_api_wasi.c#L772) — WASI 宿主函数注册示例。
+
 ### 6.1 目标
 
 实现模块实例化的完整流程，支持导入解析和宿主函数绑定。
@@ -955,6 +959,8 @@ WasmError host_fd_write(void *ud, const WasmValue *args, uint32_t argc,
 ---
 
 ## 7. 阶段 6：优化 —— Threaded Code 执行引擎
+
+> **wasm3 参考实现**：这正是 wasm3 的核心创新。编译器见 [m3_compile.c](wasm3/source/m3_compile.c)；执行引擎见 [m3_exec.h](wasm3/source/m3_exec.h)；核心宏定义见 [m3_exec_defs.h](wasm3/source/m3_exec_defs.h)；代码页管理见 [m3_code.c](wasm3/source/m3_code.c)。
 
 ### 7.1 目标
 

@@ -11,6 +11,8 @@ WebAssembly 的一个核心设计原则是 **"验证先于执行"**。任何 Was
 
 ## 1. 验证的整体架构
 
+> **wasm3 实现参考**：wasm3 将验证和编译合并在同一个过程中——编译器在生成 M3 operation 的同时进行类型检查。核心实现见 [m3_compile.c - CompileBlockStatements()](wasm3/source/m3_compile.c#L2649) — 逐条指令编译+验证；[m3_compile.c - Push()](wasm3/source/m3_compile.c#L437) / [Pop()](wasm3/source/m3_compile.c#L479) — 编译时栈模拟（等价于类型栈操作）；[m3_compile.h - M3CompilationScope](wasm3/source/m3_compile.h#L60) — 控制帧栈结构。
+
 Wasm 验证分为三个层次，由外到内依次进行：
 
 ```
@@ -70,6 +72,8 @@ Wasm 验证分为三个层次，由外到内依次进行：
 ---
 
 ## 2. 类型检查算法核心
+
+> **wasm3 实现参考**：wasm3 的编译时栈模拟实现了等价的类型检查。参见 [m3_compile.h - M3Compilation](wasm3/source/m3_compile.h#L78) — `wasmStack`/`typeStack` 字段对应类型栈；[m3_compile.c - Push()](wasm3/source/m3_compile.c#L437) — 压栈时记录类型；[m3_compile.c - Pop()](wasm3/source/m3_compile.c#L479) — 出栈时检查类型。
 
 ### 2.1 算法概述
 

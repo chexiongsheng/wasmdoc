@@ -122,6 +122,8 @@ globaltype ::= valtype mut              ; mut: 0x00 = const, 0x01 = var
 
 ## 2. 指令集架构总览
 
+> **wasm3 实现参考**：[m3_compile.c - c_operations](wasm3/source/m3_compile.c#L2047) — 完整的操作码到 M3OpInfo 映射表，包含每条指令的栈偏移、类型、operation 函数指针和编译器函数；[appendix/A-opcode-table.md](appendix/A-opcode-table.md) — 完整操作码速查表。
+
 ### 2.1 指令编码格式
 
 每条 Wasm 指令由一个**操作码**（opcode）和零或多个**立即数**（immediates）组成：
@@ -197,6 +199,8 @@ i32.mul        ; stack: [(a+b)*c]
 ---
 
 ## 3. 控制流指令（核心难点）
+
+> **wasm3 实现参考**：控制流编译见 [m3_compile.c - Compile_LoopOrBlock()](wasm3/source/m3_compile.c#L1812)、[Compile_If()](wasm3/source/m3_compile.c#L1869)、[Compile_Branch()](wasm3/source/m3_compile.c#L1533)；运行时执行见 [m3_exec.h - op_Loop()](wasm3/source/m3_exec.h#L1218)、[op_Branch()](wasm3/source/m3_exec.h#L1240)、[op_BranchTable()](wasm3/source/m3_exec.h#L1275)。
 
 控制流是 Wasm 指令集中**最独特、最重要**的部分，也是与 CIL 差异最大的地方。理解结构化控制流模型是实现 Wasm 解释器的关键。
 
@@ -689,6 +693,8 @@ i64.extend32_s     ; 将 i64 的低 32 位符号扩展到 64 位
 
 ## 6. 内存操作指令
 
+> **wasm3 实现参考**：[m3_exec.h#L1399](wasm3/source/m3_exec.h#L1399) — `d_m3Load` 宏（生成所有 load 变体）；[m3_exec.h#L1459](wasm3/source/m3_exec.h#L1459) — `d_m3Store` 宏（生成所有 store 变体）；[m3_exec.h - op_MemSize()](wasm3/source/m3_exec.h#L716)、[op_MemGrow()](wasm3/source/m3_exec.h#L725)。
+
 ### 6.1 线性内存模型
 
 Wasm 的内存是一个**连续的字节数组**（线性内存），以 **64KB 页**为单位分配。所有内存访问通过 `i32` 偏移地址进行（最大 4GB 地址空间）。
@@ -814,6 +820,8 @@ select             ; stack: [cond ? a : b]
 ---
 
 ## 8. 函数调用指令
+
+> **wasm3 实现参考**：[m3_exec.h - op_Call()](wasm3/source/m3_exec.h#L554) — 直接调用；[m3_exec.h - op_CallIndirect()](wasm3/source/m3_exec.h#L580) — 间接调用（含运行时类型检查）；[m3_compile.c - Compile_Call()](wasm3/source/m3_compile.c#L1705) — call 指令编译。
 
 ### 8.1 call
 
