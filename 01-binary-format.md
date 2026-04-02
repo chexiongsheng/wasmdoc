@@ -186,6 +186,29 @@ limits ::= 0x00 min:u32           // only minimum
          | 0x01 min:u32 max:u32   // minimum and maximum
 ```
 
+> **单位说明**：`min` 和 `max` 的单位取决于使用场景——用于 **Memory** 时单位是**页（page）**，每页 = 64 KiB（65536 字节）；用于 **Table** 时单位是**元素个数（槽位数）**。
+
+**示例 1**：仅指定最小值（min=1，无上限）：
+
+```
+0x00                    // flags = 0 (no max)
+0x01                    // min = 1
+```
+
+用于 Memory 时表示初始 1 页（64 KiB），可无限增长（实际受引擎限制）。
+
+**示例 2**：同时指定最小值和最大值（min=2, max=10）：
+
+```
+0x01                    // flags = 1 (has max)
+0x02                    // min = 2
+0x0A                    // max = 10
+```
+
+用于 Memory 时表示初始 2 页（128 KiB），最大可增长到 10 页（640 KiB）。用于 Table 时表示初始 2 个槽位，最大 10 个槽位。
+
+> **注意**：第一个字节是 flags 而非 min。`0x00` 表示只有 min，`0x01` 表示同时有 min 和 max。max 必须 ≥ min，否则模块非法。
+
 ### 3.4 块类型（Block Type）
 
 控制流指令（block/loop/if）使用块类型描述其签名：
