@@ -437,6 +437,8 @@ reftype   ::= 0x70 (funcref) | 0x6F (externref)
 
 > MVP 规范中，一个模块最多只能有**一个表**（后续提案放宽了此限制）。
 
+> **wasm3 实现参考**：wasm3 **跳过了 Table Section 的解析**（[m3_parse.c - s_parsers 数组](wasm3/source/m3_parse.c#L570) 中 id=4 的 parser 为 `NULL`），Import Section 中的 table 导入也被注释掉（[m3_parse.c#L186](wasm3/source/m3_parse.c#L186)）。但这**不代表 wasm3 不支持 table**——在 MVP 中，table 类型固定为 `funcref` 且只允许一个，Table Section 的声明信息是冗余的。wasm3 选择在运行时通过 Element Section 动态构建 table：[m3_env.c - InitElements()](wasm3/source/m3_env.c#L485) 根据 element segments 动态分配 `table0` 数组并填充函数指针；[m3_exec.h - op_CallIndirect](wasm3/source/m3_exec.h#L567) 在执行 `call_indirect` 时从 `table0` 按索引查找目标函数。数据结构见 [m3_env.h - M3Module](wasm3/source/m3_env.h#L82) 中的 `table0`/`table0Size` 字段。
+
 ---
 
 ### 4.5 Memory Section (id = 5)
