@@ -211,12 +211,77 @@ limits ::= 0x00 min:u32           // only minimum
 
 ### 3.4 块类型（Block Type）
 
-控制流指令（block/loop/if）使用块类型描述其签名：
+> **wasm3 实现参考**：[m3_compile.c - ReadBlockType()](wasm3/source/m3_compile.c#L1797) — 读取块类型，负数走值类型快捷路径，非负数走类型索引查表；[m3_env.c#L26](wasm3/source/m3_env.c#L26) — 环境初始化时预建 `retFuncTypes[]`，为每种值类型创建 `[] -> [valtype]` 的函数签名，供块类型快捷路径直接使用。
+
+控制流指令（`block`/`loop`/`if`）使用块类型描述其签名——即这个块**消耗什么类型的值、产出什么类型的值**：
 
 ```
 blocktype ::= 0x40                // empty: [] -> []
             | valtype             // shorthand: [] -> [valtype]
             | s33                 // type index (positive s33 as LEB128)
+```
+
+块类型有三种变体：
+
+**变体 1：空块类型 `0x40`** — 无参数、无返回值 `[] -> []`
+
+这是最常见的块类型。大多数 `block`、`loop`、`if` 都不产出值。
+
+```
+0x02                    // block opcode
+0x40                    // blocktype = empty ([] -> [])
+  ...                   //   block body
+0x0B                    // end
+```
+
+**变体 2：值类型简写** — 无参数、单返回值 `[] -> [valtype]`
+
+直接用一个值类型字节表示"这个块产出一个该类型的值"。因为值类型编码都是负数的 LEB128（`0x7F`=i32, `0x7E`=i64, `0x7D`=f32, `0x7C`=f64），所以不会和变体 3 的正数类型索引冲突。
+
+```
+0x02                    // block opcode
+0x7F                    // blocktype = i32 ([] -> [i32])
+  0x41 0x2A             //   i32.const 42
+0x0B                    // end
+// block 结束后栈顶多了一个 i32 值 (42)
+```
+
+**变体 3：类型索引（多参数/多返回值）** — 引用 Type Section 中的函数签名
+
+当块需要**消耗参数**或**产出多个返回值**时，使用 Type Section 中的类型索引。编码为 **s33**（有符号 33 位 LEB128），取正数值作为索引。
+
+```
+// 假设 Type Section 中 typeidx=2 的签名为 (i32, i32) -> (i32, i32)
+0x02                    // block opcode
+0x02                    // blocktype = type index 2 (s33 LEB128, positive)
+  ...                   //   block body: consumes 2 i32, produces 2 i32
+0x0B                    // end
+```
+
+> **为什么用 s33？** 值类型编码（`0x7F` 等）作为有符号 LEB128 解码后是负数（-1, -2, ...），而类型索引是非负整数。用 s33 可以在同一个字段中区分这两种情况：负数 → 值类型简写，非负数 → 类型索引。`0x40`（即 -64）被特殊保留为空块类型。
+
+**块类型与控制流的关系**：
+
+| 指令 | 块类型含义 |
+|------|-----------|
+| `block bt` | 顺序块：执行完毕后按 bt 的返回类型产出值；`br` 跳转到块**末尾** |
+| `loop bt` | 循环块：`br` 跳转到块**开头**（重新执行）；bt 的参数类型是循环入口期望的栈类型 |
+| `if bt ... else ... end` | 条件块：从栈顶弹出 i32 条件值，非零执行 if 分支，零执行 else 分支；两个分支都必须产出 bt 指定的返回类型 |
+
+**示例：if 块返回一个 i32 值**：
+
+```wasm
+;; WAT: (if (result i32) (local.get 0) (then (i32.const 1)) (else (i32.const 0)))
+```
+
+```
+20 00                   // local.get 0 (condition)
+04 7F                   // if blocktype=i32 ([] -> [i32])
+  41 01                 //   i32.const 1 (true branch)
+05                      // else
+  41 00                 //   i32.const 0 (false branch)
+0B                      // end
+// 栈顶现在有一个 i32 值（1 或 0）
 ```
 
 ---
