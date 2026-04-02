@@ -113,7 +113,7 @@ Section ::= id:byte | size:u32 | content:byte[size]
 
 **关键规则**：除 Custom Section（id=0）外，所有已知 Section 必须按 ID **严格递增**顺序出现，且每种最多出现一次。Custom Section 可以出现在任意位置、任意次数。
 
-> **wasm3 实现参考**：[m3_parse.c - ParseModuleSection()](wasm3/source/m3_parse.c#L570) — Section 分发表，根据 section id 调用对应的解析函数；[m3_parse.c#L631](wasm3/source/m3_parse.c#L631) — `sectionsOrder` 数组实现 Section 排序检查。
+> **wasm3 实现参考**：[m3_parse.c - ParseModuleSection()](wasm3/source/m3_parse.c#L570) — Section 分发表，根据 section id 调用对应的解析函数；[m3_parse.c#L636](wasm3/source/m3_parse.c#L636) — `sectionsOrder` 数组实现 Section 排序检查。
 
 ```
 [Custom]* [Type]? [Custom]* [Import]? [Custom]* [Function]? [Custom]* ...
