@@ -49,6 +49,8 @@
 
 ## 2. 二进制格式对比
 
+> **wasm3 源码参考**：[m3_parse.c - m3_ParseModule()](../wasm3/source/m3_parse.c#L598) — Wasm 二进制解析入口（对比 CLR 的多层 PE 解析，这里只有约 600 行）；[m3_core.c - ReadLebUnsigned()](../wasm3/source/m3_core.c#L356) — LEB128 解码（对比 CLR 的 Compressed Integer）。
+
 ### 2.1 文件结构
 
 | 特性 | CLR (PE/COFF) | Wasm (.wasm) |
@@ -168,6 +170,8 @@ CallingConvention | ParamCount | RetType | Param1 | Param2 | ...
 
 ## 4. 指令集对比
 
+> **wasm3 源码参考**：[m3_compile.c - c_operations](../wasm3/source/m3_compile.c#L2260) — 完整的操作码映射表（对比 CLR 的 ~220 条 CIL 指令，Wasm 有 ~170 条 MVP 指令）；[m3_exec.h](../wasm3/source/m3_exec.h) — 所有指令的运行时实现。
+
 ### 4.1 整体设计哲学
 
 | 特性 | CIL (CLR) | Wasm |
@@ -260,6 +264,8 @@ IL_000B: ret
 
 ## 5. 验证机制对比
 
+> **wasm3 源码参考**：wasm3 将验证和编译合并在同一个过程中，参见 [m3_compile.c - CompileBlockStatements()](../wasm3/source/m3_compile.c#L2649)。相比 CLR 验证器需要处理任意跳转、异常区域、泛型等复杂情况，Wasm 的结构化控制流使得单遍线性扫描即可完成验证。
+
 ### 5.1 验证流程
 
 **CLR IL 验证**：
@@ -319,6 +325,8 @@ Wasm 验证器需要处理的复杂情况：
 ---
 
 ## 6. 执行模型对比
+
+> **wasm3 源码参考**：[m3_env.h - M3Runtime](../wasm3/source/m3_env.h#L159) — 运行时结构（对比 CLR 的复杂运行时，Wasm 运行时只需要栈、内存、模块链表）；[m3_exec_defs.h](../wasm3/source/m3_exec_defs.h) — M3 执行引擎核心宏（threaded code 是 CLR 中不常见的执行策略）。
 
 ### 6.1 运行时架构
 
@@ -429,6 +437,8 @@ Wasm 验证器需要处理的复杂情况：
 
 ## 7. 内存模型对比
 
+> **wasm3 源码参考**：[m3_env.h - M3Memory](../wasm3/source/m3_env.h#L28) — 线性内存结构（对比 CLR 的分代 GC 堆，这里只是一个简单的字节数组）；[m3_env.c - ResizeMemory()](../wasm3/source/m3_env.c#L262) — 内存增长（对比 CLR 的自动堆扩展，Wasm 需要显式 `memory.grow`）。
+
 ### 7.1 整体架构
 
 **CLR 内存模型**：
@@ -523,6 +533,8 @@ typedef struct {
 ---
 
 ## 8. 模块化机制对比
+
+> **wasm3 源码参考**：[m3_env.c - m3_LoadModule()](../wasm3/source/m3_env.c#L430) — 模块加载（对比 CLR 的 Assembly 加载，无版本管理、无 GAC）；[m3_bind.c - m3_LinkRawFunction()](../wasm3/source/m3_bind.c#L168) — 导入绑定（对比 CLR 的 AssemblyRef + MemberRef 解析链，这里只是简单的二级名称查找）。
 
 ### 8.1 模块 vs Assembly
 

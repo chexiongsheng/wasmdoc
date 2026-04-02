@@ -1,7 +1,9 @@
 # 附录 A：WebAssembly 操作码速查表
 
 > 本表基于 WebAssembly Core Specification 2.0，涵盖 MVP 及主要扩展提案中的所有操作码。
-> 
+>
+> **wasm3 源码参考**：[m3_compile.c - c_operations](../wasm3/source/m3_compile.c#L2260) — 完整的操作码到 M3OpInfo 映射表（包含栈偏移、类型、operation 函数指针、编译器函数）；[m3_compile.c - c_operationsFC](../wasm3/source/m3_compile.c#L2527) — `0xFC` 前缀扩展操作码映射表；[m3_exec.h](../wasm3/source/m3_exec.h) — 所有 M3 operation 的运行时实现。
+>
 > **约定说明：**
 > - **立即数**：跟随操作码之后的固定格式参数，在解码阶段读取
 > - **栈签名**：`[inputs] → [outputs]`，描述指令对操作数栈的影响
@@ -11,6 +13,8 @@
 ---
 
 ## 1. 控制流指令（Control Instructions）
+
+> **wasm3 实现参考**：编译阶段见 [m3_compile.c - Compile_LoopOrBlock()](../wasm3/source/m3_compile.c#L1812)、[Compile_If()](../wasm3/source/m3_compile.c#L1869)、[Compile_Branch()](../wasm3/source/m3_compile.c#L1533)、[Compile_Call()](../wasm3/source/m3_compile.c#L1705)；运行时见 [m3_exec.h - op_Loop()](../wasm3/source/m3_exec.h#L1218)、[op_Branch()](../wasm3/source/m3_exec.h#L1240)、[op_BranchTable()](../wasm3/source/m3_exec.h#L1275)、[op_Call()](../wasm3/source/m3_exec.h#L554)、[op_CallIndirect()](../wasm3/source/m3_exec.h#L580)。
 
 这是 Wasm 最独特的部分——结构化控制流。与 CIL 的任意偏移跳转不同，Wasm 的跳转目标只能是嵌套块的边界。
 
@@ -59,6 +63,8 @@
 
 ## 4. 变量指令（Variable Instructions）
 
+> **wasm3 实现参考**：编译阶段见 [m3_compile.c - Compile_GetLocal()](../wasm3/source/m3_compile.c#L1299)、[Compile_SetLocal()](../wasm3/source/m3_compile.c#L1327)；全局变量见 [m3_compile.c - Compile_GetSetGlobal()](../wasm3/source/m3_compile.c#L1388)。
+
 | 操作码 | 助记符 | 立即数 | 栈签名 | 语义 |
 |--------|--------|--------|--------|------|
 | `0x20` | `local.get` | `x:localidx(u32)` | `[] → [t]` | 读取局部变量 x 压栈 |
@@ -85,6 +91,8 @@
 ---
 
 ## 6. 内存指令（Memory Instructions）
+
+> **wasm3 实现参考**：[m3_exec.h - d_m3Load](../wasm3/source/m3_exec.h#L1321) — load 操作宏（生成所有 load 变体）；[m3_exec.h - d_m3Store](../wasm3/source/m3_exec.h#L1390) — store 操作宏（生成所有 store 变体）；[m3_exec.h - op_MemSize()](../wasm3/source/m3_exec.h#L716)、[op_MemGrow()](../wasm3/source/m3_exec.h#L725) — 内存管理指令；[m3_compile.c - Compile_Load_Store()](../wasm3/source/m3_compile.c#L2205) — load/store 编译。
 
 ### 6.1 加载指令
 
@@ -204,6 +212,8 @@
 
 ### 7.6 i32 算术与位运算指令
 
+> **wasm3 实现参考**：所有 i32 算术运算的 M3 operation 实现见 [m3_exec.h](../wasm3/source/m3_exec.h)，通过 `d_m3CommutativeOp_i`/`d_m3Op_i` 等宏批量生成。例如除法和取余包含除零检查：[m3_exec.h - op_Divide_i32()](../wasm3/source/m3_exec.h#L260)。
+
 | 操作码 | 助记符 | 栈签名 | 语义 |
 |--------|--------|--------|------|
 | `0x67` | `i32.clz` | `[i32] → [i32]` | 前导零计数 |
@@ -288,6 +298,8 @@
 
 ### 7.10 类型转换指令
 
+> **wasm3 实现参考**：截断转换（可能 trap）见 [m3_exec.h - d_m3TruncMacro](../wasm3/source/m3_exec.h#L395) — 包含溢出和 NaN 检查的截断宏；位模式重解释通过 C 类型双关实现。
+
 这是实现中容易出错的部分，特别注意 trap 条件和 saturating 变体的区别。
 
 | 操作码 | 助记符 | 栈签名 | 语义 |
@@ -336,6 +348,8 @@
 
 ### 8.1 饱和截断指令（Nontrapping Float-to-Int Conversions）
 
+> **wasm3 实现参考**：饱和截断变体见 [m3_exec.h - d_m3TruncSatMacro](../wasm3/source/m3_exec.h#L395) — 溢出时返回最近可表示值而非 trap。
+
 与普通 trunc 不同，这些指令在溢出时**不 trap**，而是返回最近的可表示值。
 
 | 子操作码 | 助记符 | 栈签名 | 语义 |
@@ -360,6 +374,8 @@
 ## 9. 实现者备注
 
 ### 9.1 解码策略
+
+> **wasm3 实现参考**：[m3_compile.c - CompileBlockStatements()](../wasm3/source/m3_compile.c#L2649) — 主解码循环，逐条读取操作码并分发到对应的编译函数；[m3_compile.c - GetOpInfo()](../wasm3/source/m3_compile.c#L2554) — 操作码到 M3OpInfo 的查找（含 0xFC 前缀二级分发）。
 
 ```
 // Pseudocode: instruction decoder main loop
@@ -419,4 +435,4 @@ switch (opcode) {
 ```
 
 > **提示**：实现解释器时，可以用一个 256 元素的函数指针数组（dispatch table）处理单字节操作码，
-> 对 0xFC/0xFD/0xFE 前缀再用二级 dispatch。这正是 wasm3 的基本思路。
+> 对 0xFC/0xFD/0xFE 前缀再用二级 dispatch。这正是 wasm3 的基本思路——参见 [m3_compile.c - c_operations](../wasm3/source/m3_compile.c#L2260)（主表）和 [c_operationsFC](../wasm3/source/m3_compile.c#L2527)（0xFC 子表）。

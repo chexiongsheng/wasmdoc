@@ -1,6 +1,8 @@
 # 附录 B：LEB128 变长整数编码详解
 
 > LEB128（Little Endian Base 128）是 WebAssembly 二进制格式中最基础的编码方式。几乎所有的整数值——Section ID、类型索引、函数索引、指令立即数、向量长度等——都使用 LEB128 编码。在实现 Wasm 解析器之前，你必须先搞定它。
+>
+> **wasm3 源码参考**：[m3_core.c - ReadLebUnsigned()](../wasm3/source/m3_core.c#L356) — 无符号 LEB128 解码；[m3_core.c - ReadLebSigned()](../wasm3/source/m3_core.c#L390) — 有符号 LEB128 解码；[m3_core.c - ReadLEB_u32()](../wasm3/source/m3_core.c#L435) / [ReadLEB_i32()](../wasm3/source/m3_core.c#L465) / [ReadLEB_i64()](../wasm3/source/m3_core.c#L475) — 便捷包装函数；[m3_core.h#L291](../wasm3/source/m3_core.h#L291) — 函数声明。
 
 ## 1. 为什么用 LEB128？
 
@@ -385,6 +387,8 @@ s32 负一:
 **实现建议**：如果你之前实现过 CLR 的压缩整数解码，LEB128 的核心区别在于它是**循环驱动**的（不知道要读几个字节，直到遇到终止字节），而 CLR 是**前缀驱动**的（第一个字节就能确定总长度）。这意味着 LEB128 解码器天然需要一个循环，而 CLR 的可以用 if-else 链。
 
 ## 6. 在 Wasm 解析器中的使用模式
+
+> **wasm3 实现参考**：wasm3 的解析器中大量使用 `ReadLEB_u32`/`ReadLEB_i7` 等函数，参见 [m3_parse.c](../wasm3/source/m3_parse.c) 中的调用方式。wasm3 的游标模式使用 `bytes_t *` （即 `const uint8_t **`）作为可移动的读取指针，每次解码后自动前进。
 
 在实际的 Wasm 解析器中，你会频繁调用 LEB128 解码。建议封装一个带游标（cursor）的读取器：
 
