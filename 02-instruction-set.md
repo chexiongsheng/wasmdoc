@@ -8,6 +8,8 @@
 
 ## 1. 类型系统总览
 
+> **wasm3 实现参考**：[wasm3.h - M3ValueType](wasm3/source/wasm3.h#L70) — 值类型枚举定义（`c_m3Type_i32`/`i64`/`f32`/`f64`）；[m3_core.c - IsIntType()](wasm3/source/m3_core.c#L223)、[Is64BitType()](wasm3/source/m3_core.c#L231) — 类型判断辅助函数；[m3_compile.c - ReadBlockType()](wasm3/source/m3_compile.c#L1797) — 块类型解析（区分 empty/valtype/typeidx 三种情况）。
+
 Wasm 的类型系统是**静态的、可验证的**。所有类型信息在编译期（加载验证期）即可完全确定，运行时无需类型元数据。这与 CLR 的丰富类型系统形成鲜明对比——Wasm 的类型系统极度精简，只服务于安全验证和正确执行。
 
 ### 1.1 值类型（Value Types）
@@ -499,6 +501,8 @@ void exec_br(uint32_t label_depth) {
 
 ## 4. 变量操作指令
 
+> **wasm3 实现参考**：编译见 [m3_compile.c - Compile_GetLocal()](wasm3/source/m3_compile.c#L1323)、[Compile_SetLocal()](wasm3/source/m3_compile.c#L1293)（同时处理 `local.set` 和 `local.tee`）、[Compile_GetSetGlobal()](wasm3/source/m3_compile.c#L1382)；运行时执行见 [m3_exec.h - op_GetGlobal_s32()](wasm3/source/m3_exec.h#L506)、[op_SetGlobal_i32()](wasm3/source/m3_exec.h#L526)、[op_SetGlobal_s32()](wasm3/source/m3_exec.h#L1275)。局部变量在 wasm3 中通过栈槽（slot）直接寻址，无需专门的 get/set 运行时操作。
+
 ### 4.1 局部变量（Local Variables）
 
 ```
@@ -540,6 +544,8 @@ global.set globalidx  ; 0x24 + LEB128 index → pop value, store
 
 ## 5. 数值运算指令
 
+> **wasm3 实现参考**：[m3_compile.c - c_operations[]](wasm3/source/m3_compile.c#L2260) — 完整操作码映射表（含所有数值指令的 M3OpInfo）；[c_operationsFC[]](wasm3/source/m3_compile.c#L2527) — 0xFC 前缀扩展指令映射表。
+
 数值指令是 Wasm 指令集中数量最多的部分，但也是最直观的——如果你实现过 CLR 的算术指令，这部分会非常熟悉。
 
 ### 5.1 常量指令
@@ -551,9 +557,13 @@ f32.const value    ; 0x43 + 4 bytes (IEEE 754 little-endian)
 f64.const value    ; 0x44 + 8 bytes (IEEE 754 little-endian)
 ```
 
+> **wasm3 实现参考**：编译见 [m3_compile.c - Compile_Const_i32()](wasm3/source/m3_compile.c#L1153)、[Compile_Const_f32()](wasm3/source/m3_compile.c#L1177)；运行时执行见 [m3_exec.h - op_Const32()](wasm3/source/m3_exec.h#L1240)、[op_Const64()](wasm3/source/m3_exec.h#L1249)。
+
 注意浮点常量是**原始字节**编码（不是 LEB128），直接 4/8 字节小端序。
 
 ### 5.2 整数算术运算
+
+> **wasm3 实现参考**：[m3_exec.h#L196](wasm3/source/m3_exec.h#L196) — `OP_ADD/SUB/MUL` 宏 + `d_m3CommutativeOpFunc_i` 生成 add/mul 运行时操作；[m3_exec.h#L240](wasm3/source/m3_exec.h#L240) — `d_m3OpMacro_i` 生成 Divide/Remainder 操作（含除零和溢出 trap 检查）。
 
 | 指令 | 栈签名 | 语义 | 备注 |
 |------|--------|------|------|
@@ -575,6 +585,8 @@ f64.const value    ; 0x44 + 8 bytes (IEEE 754 little-endian)
 
 ### 5.3 整数位运算
 
+> **wasm3 实现参考**：[m3_exec.h#L219](wasm3/source/m3_exec.h#L219) — `d_m3CommutativeOp_i` 生成 And/Or/Xor 操作；[m3_exec.h#L216](wasm3/source/m3_exec.h#L216) — `d_m3OpFunc_i` 生成 ShiftLeft/ShiftRight 操作；[m3_exec.h#L234](wasm3/source/m3_exec.h#L234) — `d_m3OpFunc_i` 生成 Rotl/Rotr 操作。
+
 | 指令 | 语义 |
 |------|------|
 | `i32.and` | 按位与 |
@@ -590,6 +602,8 @@ f64.const value    ; 0x44 + 8 bytes (IEEE 754 little-endian)
 
 ### 5.4 整数比较运算
 
+> **wasm3 实现参考**：[m3_exec.h#L175](wasm3/source/m3_exec.h#L175) — `d_m3CommutativeOp_i`/`d_m3Op_i` 生成 Equal/NotEqual/LessThan/GreaterThan 等比较操作；[m3_exec.h#L289](wasm3/source/m3_exec.h#L289) — `d_m3UnaryOp_i(i32, EqualToZero, OP_EQZ)` 生成 eqz 操作。
+
 所有比较运算返回 `i32`（0 或 1）：
 
 | 指令 | 语义 |
@@ -604,6 +618,8 @@ f64.const value    ; 0x44 + 8 bytes (IEEE 754 little-endian)
 
 ### 5.5 整数一元运算
 
+> **wasm3 实现参考**：[m3_exec.h#L306](wasm3/source/m3_exec.h#L306) — `OP_CLZ_32/64`、`OP_CTZ_32/64` 宏（含平台特定的 `__builtin_clz` 优化和零值边界处理）；[m3_exec.h#L316](wasm3/source/m3_exec.h#L316) — `d_m3UnaryOp_i` 生成 Clz/Ctz/Popcnt 操作。
+
 | 指令 | 语义 |
 |------|------|
 | `i32.clz` | 前导零计数（count leading zeros） |
@@ -613,6 +629,8 @@ f64.const value    ; 0x44 + 8 bytes (IEEE 754 little-endian)
 > **实现提示**：大多数 CPU 有对应的硬件指令（`__builtin_clz`、`_lzcnt_u32` 等）。如果你的目标平台没有，需要软件模拟。
 
 ### 5.6 浮点运算
+
+> **wasm3 实现参考**：[m3_exec.h#L229](wasm3/source/m3_exec.h#L229) — `d_m3CommutativeOp_f`/`d_m3Op_f` 生成浮点 Add/Sub/Mul/Div 操作；[m3_exec.h#L250](wasm3/source/m3_exec.h#L250) — `d_m3OpFunc_f` 生成 Min/Max/CopySign 操作；[m3_exec.h#L281](wasm3/source/m3_exec.h#L281) — `d_m3UnaryOp_f` 生成 Abs/Ceil/Floor/Trunc/Sqrt/Nearest/Negate 操作。
 
 浮点运算严格遵循 **IEEE 754-2019** 标准：
 
@@ -635,6 +653,8 @@ f64.const value    ; 0x44 + 8 bytes (IEEE 754 little-endian)
 > 2. NaN 的 canonical 化：Wasm spec test 会检查 NaN 的 quiet/signaling 位
 
 ### 5.7 类型转换指令
+
+> **wasm3 实现参考**：[m3_exec.h#L353](wasm3/source/m3_exec.h#L353) — `d_m3TruncMacro` 生成所有 Trunc/TruncSat 操作（含溢出和 NaN 检查）；[m3_exec.h#L425](wasm3/source/m3_exec.h#L425) — `d_m3TypeConvertOp` 生成 Convert 操作；[m3_exec.h#L421](wasm3/source/m3_exec.h#L421) — `d_m3TypeModifyOp` 生成 Demote/Promote 操作；[m3_exec.h#L465](wasm3/source/m3_exec.h#L465) — `d_m3ReinterpretOp` 生成 Reinterpret 操作；编译见 [m3_compile.c - Compile_Convert()](wasm3/source/m3_compile.c#L2176)。
 
 Wasm 提供了丰富的类型转换指令：
 
@@ -680,6 +700,8 @@ f64.reinterpret_i64
 > **CLR 对比**：CIL 的 `conv.i4`/`conv.r8` 等转换指令与 Wasm 的转换指令功能类似，但 CIL 的溢出行为不同——CIL 的 `conv.ovf.i4` 在溢出时抛出 `OverflowException`，而 Wasm 的 `trunc` 在溢出时触发 trap（不可恢复）。Wasm 的 `trunc_sat` 系列则提供了饱和语义（不 trap）。
 
 ### 5.8 符号扩展指令
+
+> **wasm3 实现参考**：[m3_exec.h#L340](wasm3/source/m3_exec.h#L340) — `OP_EXTEND8_S_I32` 等宏定义 + `d_m3UnaryOp_i` 生成所有符号扩展操作；[m3_exec.h#L325](wasm3/source/m3_exec.h#L325) — `OP_WRAP_I64` 宏 + `op_i32_Wrap_i64` 操作。
 
 ```
 i32.extend8_s      ; 将 i32 的低 8 位符号扩展到 32 位
@@ -790,6 +812,8 @@ memory.fill    ; 0xFC 0x0B — 内存区域填充（类似 memset）
 
 ## 7. 参数指令（Parametric Instructions）
 
+> **wasm3 实现参考**：编译见 [m3_compile.c - Compile_Drop()](wasm3/source/m3_compile.c#L2063)、[Compile_Select()](wasm3/source/m3_compile.c#L1983)；运行时执行见 [m3_exec.h - d_m3Select_i()](wasm3/source/m3_exec.h#L1055)、[d_m3Select_f()](wasm3/source/m3_exec.h#L1105)。`drop` 在 wasm3 中纯粹是编译期操作（弹出虚拟栈），不生成运行时指令。
+
 ### 7.1 drop
 
 ```
@@ -876,6 +900,8 @@ return_call_indirect typeidx tableidx  ; 尾调用优化版 call_indirect
 
 ## 9. 引用指令
 
+> **wasm3 实现参考**：wasm3 对引用类型的支持有限。在 [m3_compile.c - c_operations[]](wasm3/source/m3_compile.c#L2260) 中，`ref.null`（0xD0）、`ref.is_null`（0xD1）、`ref.func`（0xD2）被标记为 `M3OP_RESERVED`，表示尚未实现。
+
 ### 9.1 ref.null
 
 ```
@@ -903,6 +929,8 @@ ref.func funcidx    ; 0xD2 + LEB128 函数索引 → push funcref
 ---
 
 ## 10. 表操作指令
+
+> **wasm3 实现参考**：wasm3 对表操作的支持有限。在 [m3_compile.c - c_operations[]](wasm3/source/m3_compile.c#L2260) 中，`table.get`（0x25）和 `table.set`（0x26）被标记为 `M3OP_RESERVED`；在 [c_operationsFC[]](wasm3/source/m3_compile.c#L2527) 中，`table.init`/`elem.drop`/`table.copy` 等扩展表操作同样未实现。
 
 表（Table）是 Wasm 中存储引用类型的数组结构，主要用于实现间接函数调用。
 
