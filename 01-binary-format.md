@@ -613,6 +613,44 @@ elem ::= flags:u32 ...  // flags determines the variant
   0x02                  //     funcidx[2] = 2
 ```
 
+**为什么 offset 用表达式而不是直接写一个数字？**
+
+偏移量不一定在编译时就能确定。在**动态链接**场景中，多个 Wasm 模块共享同一张 Table，每个模块在编译时不知道自己应该从表的哪个位置开始填充。解决方案是通过导入一个全局变量作为偏移基址。
+
+**动态链接示例**（模块 B 通过导入的全局变量 `__table_base` 决定偏移，假设 `__table_base` 是 importidx=0 的全局变量）：
+
+```
+// Import Section — 导入全局变量 __table_base
+0x02                    // Import Section id
+0x11                    // section size
+0x01                    // import count = 1
+  0x03 0x65 0x6E 0x76   //   module name = "env"
+  0x0C 0x5F 0x5F 0x74   //   field name = "__table_base"
+  0x61 0x62 0x6C 0x65
+  0x5F 0x62 0x61 0x73
+  0x65
+  0x03                  //   import kind = global
+  0x7F                  //     type = i32
+  0x00                  //     mutability = const
+
+// Element Section — 用 global.get 作为 offset
+0x09                    // Element Section id
+0x07                    // section size
+0x01                    // element segment count = 1
+  0x00                  //   flags = 0 (active, table 0, funcidx)
+  0x23 0x00             //   offset expr: global.get 0 (__table_base)
+  0x0B                  //   end of expr
+  0x02                  //   funcidx count = 2
+  0x00                  //     funcidx[0] = 0
+  0x01                  //     funcidx[1] = 1
+```
+
+宿主环境在实例化时传入 `__table_base = 3`，模块 B 的函数就填到 `table[3]` 和 `table[4]`，避免与模块 A 的 `table[0..2]` 冲突。Emscripten 编译 C/C++ 到 Wasm 的动态链接模式（`-s SIDE_MODULE`）就是这么做的。
+
+WebAssembly 选择统一用表达式而非"数字 OR 表达式"两种模式——`i32.const 0` + `end` 一共才 3 个字节（`0x41 0x00 0x0B`），代价极小，但换来了格式的统一性，解析器只需实现一套逻辑。初始化表达式（const expr）只允许 `*.const`、`global.get`（仅限导入的不可变全局变量）、`ref.null`、`ref.func` 和 `end`，不会有复杂的控制流或计算。
+
+> **Data Section 的 offset expr 与此完全对称**：Element Section 的 offset 指定函数引用填充到 **Table** 的起始位置，Data Section 的 offset 指定字节数据写入 **Memory** 的起始地址。两者都支持 `global.get` 实现动态偏移。
+
 **Active vs Passive vs Declarative**：
 - **Active**：在实例化时自动将元素复制到表中（需要偏移表达式）
 - **Passive**：不自动初始化，通过 `table.init` 指令在运行时按需复制
@@ -705,6 +743,25 @@ data    ::= 0x00 offset:expr init:vec(byte)     // active, memory 0
   0x48 0x65 0x6C 0x6C   //   "Hell"
   0x6F                  //   "o"
 ```
+
+**offset expr 与动态链接**：与 Element Section 相同，Data Section 的 offset 也是一个初始化表达式而非简单数字。在动态链接场景中，多个模块共享同一块线性内存，每个模块通过导入的全局变量 `__memory_base` 来确定自己的数据应该写入内存的哪个位置。
+
+**动态链接示例**（假设 `__memory_base` 是 importidx=0 的全局变量，宿主传入值 1024）：
+
+```
+// Data Section — 用 global.get 作为 offset
+0x0B                    // Data Section id
+0x0A                    // section size
+0x01                    // data segment count = 1
+  0x00                  //   flags = 0 (active, memory 0)
+  0x23 0x00             //   offset expr: global.get 0 (__memory_base)
+  0x0B                  //   end of expr
+  0x05                  //   data length = 5
+  0x48 0x65 0x6C 0x6C   //   "Hell"
+  0x6F                  //   "o"
+```
+
+宿主环境在实例化时传入 `__memory_base = 1024`，字符串 "Hello" 就写入 `memory[1024..1028]`，避免与其他模块的数据区冲突。
 
 **Active vs Passive**：
 - **Active**：实例化时自动将数据复制到内存的指定偏移处
