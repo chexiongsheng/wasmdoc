@@ -369,6 +369,31 @@ block $L0                    ; depth 2 (from br's perspective)
 end ;; $L0
 ```
 
+**注意：`br` 的跳转目标取决于目标块的类型**。上面的例子全是 `block`，所以 `br` 都跳到 `end` 之后。如果目标是 `loop`，则跳到 `loop` 的**开头**（形成循环）。`labelidx` 的计算规则不变——都是"向外数第几层包围块"，只是到达目标后的去向不同：
+
+```
+block $break                 ; depth 1 — block 类型，br 到此 → 跳到 end 之后
+  loop $continue             ; depth 0 — loop 类型，br 到此 → 跳回 loop 开头
+    ;; ... loop body ...
+    br_if 0                  ; 目标是 loop $continue (depth 0) → 跳回开头（continue）
+    br 1                     ; 目标是 block $break (depth 1)   → 跳到 end 之后（break）
+  end
+end
+```
+
+对应的二进制编码：
+```
+02 40           ; block (void)        ← $break
+  03 40         ;   loop (void)       ← $continue
+    ...
+    0D 00       ;   br_if 0           ← continue：目标是 loop（depth 0），跳回开头
+    0C 01       ;   br 1              ← break：目标是 block（depth 1），跳到 end 之后
+  0B            ;   end (loop)
+0B              ; end (block)
+```
+
+> 这是 Wasm 循环的固定套路：**外面套一层 `block` 用来 break，里面放 `loop` 用来 continue**。`labelidx` 的值完全一样都是相对深度，跳转方向由目标块类型自动决定。
+
 **br 的栈行为**：
 - 跳转时，从当前栈中弹出目标块的**结果类型**对应的值
 - 丢弃栈上多余的值
