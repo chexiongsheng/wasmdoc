@@ -211,17 +211,19 @@ typedef struct M3Compilation {
     // M3 code emission
     IM3CodePage         page;                   // current code page being written to
 
-    // Operand stack simulation (compile-time)
+    // Operand stack simulation (compile-time) — uses parallel arrays, NOT a struct
     u16                 stackIndex;             // current stack depth
-    u16                 stackFirstDynamicIndex;
-    M3CompileStack      typeStack[c_m3MaxFunctionStackHeight]; // compile-time type stack
+    u16                 slotFirstDynamicIndex;
+    u16                 wasmStack  [d_m3MaxFunctionStackHeight]; // each stack position → slot number (real slot or register alias)
+    u8                  typeStack  [d_m3MaxFunctionStackHeight]; // each stack position → value type (i32/i64/f32/f64)
+    u8                  m3Slots    [d_m3MaxFunctionSlots];       // each slot → allocation refcount
 
     // Control flow
     u16                 blockDepth;
-    M3CompileBlock      block;                  // current block info
+    M3CompilationScope  block;                  // current block scope
 
     // Register allocation
-    u16                 regStackIndexPlusOne[2]; // [0]=i64 reg, [1]=f64 reg
+    u16                 regStackIndexPlusOne[2]; // [0]=i64 reg, [1]=f64 reg; 0=unallocated
 
     // ... various flags and state
 }
@@ -515,14 +517,16 @@ Code Page Memory:
 
 > **源码位置**：[m3_compile.c - Push()](wasm3/source/m3_compile.c#L542) — 编译时压栈；[m3_compile.c - Pop()](wasm3/source/m3_compile.c#L584) — 编译时出栈；[m3_compile.h - M3Compilation](wasm3/source/m3_compile.h#L54) — `wasmStack`/`typeStack`/`m3Slots`/`regStackIndexPlusOne` 等字段实现栈模拟和寄存器跟踪。
 
-wasm3 在编译时维护一个**模拟栈**（compile-time stack），跟踪每个栈槽的类型和位置：
+wasm3 在编译时维护一个**模拟栈**（compile-time stack），用**平行数组**跟踪每个栈位置的类型和 slot 位置（并非一个独立的结构体，而是 `M3Compilation` 中的多个数组字段）：
 
 ```c
-typedef struct M3CompileStack {
-    u8      type;           // value type (i32/i64/f32/f64)
-    u16     slotIndex;      // position in runtime stack
-    u8      flags;          // constant? in register? etc.
-} M3CompileStack;
+// m3_compile.h — M3Compilation 结构中的栈模拟字段（非独立结构体）
+u16  wasmStack  [d_m3MaxFunctionStackHeight];  // wasmStack[i] = slot number for stack position i
+                                               //   real slot (< 60000): value in _sp[slot]
+                                               //   pseudo slot (>= 60000): value in register (_r0 or _fp0)
+u8   typeStack  [d_m3MaxFunctionStackHeight];  // typeStack[i] = value type (c_m3Type_i32/i64/f32/f64)
+u8   m3Slots    [d_m3MaxFunctionSlots];        // m3Slots[slot] = allocation refcount for that slot
+u16  regStackIndexPlusOne [2];                 // [0]=_r0 (int), [1]=_fp0 (float); 0=unallocated
 ```
 
 **寄存器优化**是 wasm3 的重要性能技巧。wasm3 模拟了两个"虚拟寄存器"：
@@ -541,6 +545,288 @@ With reg:       _r0 = 42        spill _r0→slot  _r0 = slot + _r0
 ```
 
 当寄存器被占用时，编译器会发射一个 "spill" 操作将寄存器值写回栈槽，然后复用寄存器。这种优化减少了约 30-40% 的栈操作。
+
+#### 4.6.1 栈槽（Slot）与寄存器的数据结构
+
+> **源码位置**：[m3_compile.h#L78](wasm3/source/m3_compile.h#L78) — `M3Compilation` 结构中的 `wasmStack`/`typeStack`/`m3Slots`/`regStackIndexPlusOne`；[m3_core.h#L162](wasm3/source/m3_core.h#L162) — `d_m3Reg0SlotAlias` / `d_m3Fp0SlotAlias` 定义。
+
+编译期虚拟栈的核心字段（[m3_compile.h#L95-L115](wasm3/source/m3_compile.h#L95)）：
+
+```c
+typedef struct M3Compilation {
+    // ...
+    u16  stackIndex;                                    // current stack top index
+
+    u16  wasmStack  [d_m3MaxFunctionStackHeight];       // each stack position → slot number
+    u8   typeStack  [d_m3MaxFunctionStackHeight];       // each stack position → value type
+
+    u8   m3Slots    [d_m3MaxFunctionSlots];             // each slot → allocation refcount
+
+    u16  regStackIndexPlusOne [2];                      // [0]=_r0 (int), [1]=_fp0 (float)
+                                                        // stores (stackIndex+1) that occupies the register; 0 = unallocated
+    // ...
+} M3Compilation;
+```
+
+**`wasmStack[i]` 存的不是值本身，而是一个 slot 编号（u16）**，表示"第 i 个栈元素的值存放在哪里"。slot 编号有两种含义：
+
+- **真实 slot**（< `d_m3MaxFunctionSlots`）：值在运行时栈 `_sp[slot]` 中
+- **伪 slot**（>= 60000）：值在 CPU 寄存器中
+
+伪 slot 的定义（[m3_core.h#L162-163](wasm3/source/m3_core.h#L162)）：
+
+```c
+#define d_m3Reg0SlotAlias    60000       // integer register _r0
+#define d_m3Fp0SlotAlias     (60000 + 2) // float register _fp0
+```
+
+判断栈顶值是否在寄存器中（[m3_compile.c#L263](wasm3/source/m3_compile.c#L263)）：
+
+```c
+bool IsStackIndexInRegister(IM3Compilation o, i32 i_stackIndex)
+{
+    if (i_stackIndex >= 0 and i_stackIndex < o->stackIndex)
+        return (o->wasmStack[i_stackIndex] >= d_m3Reg0SlotAlias);  // >= 60000 → in register
+    else
+        return false;
+}
+```
+
+运行时栈 `_sp` 的布局：
+
+```
+_sp array layout:
+┌──────────┬──────────┬──────────────┬──────────────────┐
+│  args    │  locals  │  constants   │  dynamic slots   │
+│ (参数)   │ (局部变量)│ (编译期常量) │ (临时值/中间结果) │
+└──────────┴──────────┴──────────────┴──────────────────┘
+     ↑           ↑            ↑              ↑
+slotFirstLocalIndex  slotFirstConstIndex  slotFirstDynamicIndex
+```
+
+#### 4.6.2 PushRegister：标记栈顶值在寄存器中
+
+> **源码位置**：[m3_compile.c#L573 - PushRegister()](wasm3/source/m3_compile.c#L573) — 将寄存器伪 slot 压入编译期栈；[m3_compile.c#L542 - Push()](wasm3/source/m3_compile.c#L542) — 底层压栈操作。
+
+`PushRegister` 的实现非常简单——它调用 `Push` 并传入寄存器的伪 slot 编号：
+
+```c
+// m3_compile.c#L573
+static inline
+M3Result  PushRegister  (IM3Compilation o, u8 i_type)
+{
+    // d_m3Reg0SlotAlias (60000) is guaranteed > d_m3MaxFunctionSlots, so it's distinguishable
+    u16 slot = IsFpType (i_type) ? d_m3Fp0SlotAlias : d_m3Reg0SlotAlias;
+    return Push (o, i_type, slot);
+}
+
+// m3_compile.c#L542 — Push: the low-level stack push
+static
+M3Result  Push  (IM3Compilation o, u8 i_type, u16 i_slot)
+{
+    u16 stackIndex = o->stackIndex++;
+    o->wasmStack [stackIndex] = i_slot;      // record slot number (real or pseudo)
+    o->typeStack [stackIndex] = i_type;      // record type
+
+    if (IsRegisterSlotAlias (i_slot))        // if pseudo slot (>= 60000)
+    {
+        u32 regSelect = IsFpRegisterSlotAlias (i_slot);  // 0=int, 1=fp
+        AllocateRegister (o, regSelect, stackIndex);     // mark register as occupied
+    }
+    return m3Err_none;
+}
+```
+
+与之对比，当值在栈槽中时，直接传入真实 slot 编号：
+
+```c
+// Compile_GetLocal (m3_compile.c#L1322) — value stays in its slot, no register involved
+static M3Result  Compile_GetLocal  (IM3Compilation o, m3opcode_t i_opcode)
+{
+    u32 localIndex;
+    ReadLEB_u32 (& localIndex, & o->wasm, o->wasmEnd);
+
+    u8 type = GetStackTypeFromBottom (o, localIndex);
+    u16 slot = GetSlotForStackIndex (o, localIndex);    // real slot number (e.g. 0, 1, 2...)
+
+    Push (o, type, slot);                               // wasmStack[top] = real slot, NOT register
+}
+```
+
+#### 4.6.3 PushRegister 的三种典型调用场景
+
+**场景 1：算术运算结果留在寄存器**
+
+> **源码位置**：[m3_compile.c#L2092 - Compile_Operator()](wasm3/source/m3_compile.c#L2092)
+
+这是最常见的场景。几乎所有算术/比较运算（`i32.add`、`i32.mul`、`i32.lt_s` 等）的结果都通过 `PushRegister` 标记为在寄存器中，因为运行时 op 函数会把结果写入 `_r0`：
+
+```c
+// m3_compile.c#L2092 — Compile_Operator (simplified, showing key logic)
+static M3Result  Compile_Operator  (IM3Compilation o, m3opcode_t i_opcode)
+{
+    IM3OpInfo opInfo = GetOpInfo (i_opcode);
+    IM3Operation op;
+
+    // Select operation variant based on operand locations:
+    if (IsStackTopInRegister (o))
+        op = opInfo->operations [0];    // _rs: top in register, second in slot
+    else if (IsStackTopMinus1InRegister (o))
+        op = opInfo->operations [1];    // _sr: top in slot, second in register
+    else {
+        PreserveRegisterIfOccupied (o, opInfo->type);  // spill register first
+        op = opInfo->operations [2];    // _ss: both in slots
+    }
+
+    EmitOp (o, op);
+    EmitSlotNumOfStackTopAndPop (o);        // emit & pop operand(s)
+    if (opInfo->stackOffset < 0)
+        EmitSlotNumOfStackTopAndPop (o);
+
+    // ★ Result is always in register (_r0 or _fp0)
+    if (opInfo->type != c_m3Type_none)
+        PushRegister (o, opInfo->type);     // wasmStack[top] = 60000 (d_m3Reg0SlotAlias)
+}
+```
+
+对应的运行时 op（以 `i32.add` 的 `_rs` 变体为例）确实把结果写入 `_r0`：
+
+```c
+d_m3Op(i32_Add_rs)
+{
+    i32 operand = slot (i32);
+    OP_ADD_32((_r0), operand, ((i32) _r0));  // result → _r0
+    nextOp ();
+}
+```
+
+**场景 2：`memory.size` / `memory.grow` 结果进寄存器**
+
+> **源码位置**：[m3_compile.c#L1738 - Compile_Memory_Size()](wasm3/source/m3_compile.c#L1738)；[m3_compile.c#L1753 - Compile_Memory_Grow()](wasm3/source/m3_compile.c#L1753)
+
+这些指令的结果（页数）也通过 `PushRegister` 标记为在寄存器中：
+
+```c
+// m3_compile.c#L1738
+static M3Result  Compile_Memory_Size  (IM3Compilation o, m3opcode_t i_opcode)
+{
+    // ★ Must spill register first if occupied, because op_MemSize will write to _r0
+    PreserveRegisterIfOccupied (o, c_m3Type_i32);
+
+    EmitOp (o, op_MemSize);
+
+    // ★ Result is in _r0
+    PushRegister (o, c_m3Type_i32);
+}
+```
+
+**场景 3：`CopyStackTopToRegister` — 将栈槽值搬到寄存器**
+
+> **源码位置**：[m3_compile.c#L904 - CopyStackTopToRegister()](wasm3/source/m3_compile.c#L904)
+
+当编译器需要将一个在栈槽中的值搬到寄存器时（例如 `br_if` 需要条件值在寄存器中），会调用此函数：
+
+```c
+// m3_compile.c#L904
+static M3Result  CopyStackTopToRegister  (IM3Compilation o, bool i_updateStack)
+{
+    if (IsStackTopInSlot (o))                           // only if NOT already in register
+    {
+        u8 type = GetStackTopType (o);
+
+        PreserveRegisterIfOccupied (o, type);           // spill old register value if any
+
+        IM3Operation op = c_setRegisterOps [type];      // → op_SetRegister_i32 / _i64 / _f32 / _f64
+        EmitOp (o, op);
+        EmitSlotOffset (o, GetStackTopSlotNumber (o));  // emit source slot offset
+
+        if (i_updateStack)
+        {
+            PopType (o, type);
+            PushRegister (o, type);                     // ★ now stack top is in register
+        }
+    }
+}
+```
+
+#### 4.6.4 Spill（溢出）：PreserveRegisterIfOccupied
+
+> **源码位置**：[m3_compile.c#L474 - PreserveRegisterIfOccupied()](wasm3/source/m3_compile.c#L474)
+
+当编译器需要使用寄存器但寄存器已被占用时，必须先将旧值"溢出"到栈槽：
+
+```c
+// m3_compile.c#L474
+static M3Result  PreserveRegisterIfOccupied  (IM3Compilation o, u8 i_registerType)
+{
+    u32 regSelect = IsFpType (i_registerType);
+
+    if (IsRegisterAllocated (o, regSelect))             // register is occupied?
+    {
+        u16 stackIndex = GetRegisterStackIndex (o, regSelect);
+        DeallocateRegister (o, regSelect);              // mark register as free
+
+        u8 type = GetStackTypeFromBottom (o, stackIndex);
+
+        u16 slot = c_slotUnused;
+        AllocateSlots (o, & slot, type);                // allocate a real stack slot
+        o->wasmStack [stackIndex] = slot;               // ★ update: was 60000 (register), now real slot
+
+        EmitOp (o, c_setSetOps [type]);                 // emit op_SetSlot_i32 / _i64 / _f32 / _f64
+        EmitSlotOffset (o, slot);                       // emit target slot offset
+    }
+}
+```
+
+**关键操作**：`o->wasmStack[stackIndex] = slot` — 将编译期栈中该位置的记录从伪 slot（60000）改为真实 slot 编号，表示值已从寄存器溢出到栈内存。
+
+#### 4.6.5 完整流程示例
+
+以 `i32.const 42  i32.const 10  i32.add` 为例，追踪编译期栈和寄存器的变化：
+
+```
+Step 1: i32.const 42
+  → PushConst(o, 42, i32)
+  → 42 written to constants table, Push(o, i32, constSlot3)
+  → wasmStack: [..., slot3]     register: _r0=free
+  → (value is in a constant slot, not in register)
+
+Step 2: i32.const 10
+  → PushConst(o, 10, i32)
+  → 10 written to constants table, Push(o, i32, constSlot4)
+  → wasmStack: [..., slot3, slot4]     register: _r0=free
+
+Step 3: i32.add
+  → Compile_Operator(o, 0x6A)
+  → Both operands in slots → PreserveRegisterIfOccupied (no-op, _r0 is free)
+  → Select op = op_i32_Add_ss (both in slots)
+  → EmitOp(op_i32_Add_ss), EmitSlotOffset(slot4), EmitSlotOffset(slot3)
+  → Pop both operands
+  → PushRegister(o, i32)                    ★ result marked as in _r0
+  → wasmStack: [..., 60000]     register: _r0=occupied (stackIndex=top)
+
+If another i32.const follows:
+  → PushConst(o, 99, i32)
+  → 99 is a constant, Push(o, i32, constSlot5)
+  → wasmStack: [..., 60000, slot5]     register: _r0=still occupied
+  → (no spill needed — the new const goes to a slot, not to register)
+
+If another i32.add follows:
+  → Compile_Operator: top=slot5 (in slot), top-1=60000 (in register)
+  → Select op = op_i32_Add_sr (slot + register)
+  → EmitOp(op_i32_Add_sr), EmitSlotOffset(slot5)
+  → Pop both, PushRegister(o, i32)          ★ result in _r0 again
+```
+
+#### 4.6.6 设计思路总结
+
+栈槽与寄存器优化的核心设计思路：
+
+1. **统一的 slot 编号空间**：用 `wasmStack[]` 数组统一追踪所有值的位置，真实 slot（< 60000）和寄存器伪 slot（>= 60000）共用同一套 Push/Pop 机制，代码简洁
+2. **编译期决策，运行时零开销**：编译器在编译时就确定每个值在寄存器还是栈槽中，并选择对应的 op 变体（`_rs`/`_sr`/`_ss`），运行时无需任何判断
+3. **惰性溢出（Lazy Spill）**：只有当寄存器确实需要被复用时才溢出（`PreserveRegisterIfOccupied`），而不是每次都写回栈槽
+4. **每种 op 多变体**：同一个 Wasm 操作码根据操作数位置生成不同的 M3 op（如 `op_i32_Add_rs` vs `op_i32_Add_ss`），每个变体的代码路径最短，无运行时分支
+5. **只有两个寄存器**：刻意限制为 `_r0`（整数）和 `_fp0`（浮点）各一个，因为它们作为函数参数传递，在大多数 ABI 中会被分配到真实 CPU 寄存器，同时保持分配逻辑极其简单
 
 ### 4.7 控制流编译
 
