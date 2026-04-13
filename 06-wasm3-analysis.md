@@ -1581,31 +1581,83 @@ d_m3Op  (CallRawFunction)
 }
 ```
 
-#### 方式 2：Wasm 模块间的函数调用
+#### 方式 2：Wasm 模块间的函数调用（必须通过宿主中转）
 
-wasm3 中同一个 `M3Runtime` 可以加载多个模块（通过多次调用 `m3_LoadModule`），模块以**链表**形式挂在 `runtime->modules` 上：
+**wasm3 不支持自动的 Wasm-to-Wasm 导入解析**。这一点可以从 `Compile_Call` 的源码中明确看出：
 
 ```c
-// m3_env.c#L596 — m3_LoadModule (simplified)
-M3Result  m3_LoadModule  (IM3Runtime io_runtime, IM3Module io_module)
+// m3_compile.c#L1659 — Compile_Call (actual source)
+M3Result  Compile_Call  (IM3Compilation o, m3opcode_t i_opcode)
 {
-    io_module->runtime = io_runtime;
+    u32 functionIndex;
+    ReadLEB_u32 (& functionIndex, & o->wasm, o->wasmEnd);
 
-    InitMemory (io_runtime, io_module);     // initialize or share memory
-    InitGlobals (io_module);                // evaluate global init expressions
-    InitDataSegments (& io_runtime->memory, io_module);
-    InitElements (io_module);
+    IM3Function function = Module_GetFunction (o->module, functionIndex);
+    //                                        ^^^^^^^^^^
+    //  ★ Key: only searches within the CURRENT module's function array
 
-    // ★ Insert module at head of linked list
-    io_module->next = io_runtime->modules;
-    io_runtime->modules = io_module;
+    if (function)
+    {
+        if (function->module)                   // ★ Check: is function->module set?
+        {
+            // function->module is set → function is linked, emit call
+            if (function->compiled)
+            {
+                EmitOp (o, op_Call);             // already compiled → direct call
+                EmitPointer (o, function->compiled);
+            }
+            else
+            {
+                EmitOp (o, op_Compile);          // lazy compile on first call
+                EmitPointer (o, function);
+            }
+        }
+        else
+        {
+            // ★ function->module is NULL → import not resolved!
+            _throw (ErrorCompile (m3Err_functionImportMissing, ...));
+        }
+    }
 }
 ```
 
-当通过 `m3_FindFunction` 查找函数时，会遍历 runtime 中所有模块：
+**`function->module` 的设置时机**决定了导入函数能否被调用：
+
+| 函数类型 | `func->module` 何时设置 | 源码位置 |
+|---------|------------------------|---------|
+| 本模块定义的函数 | 解析 Code Section 时 `func->module = io_module` | `m3_parse.c#L393` |
+| 通过 `m3_LinkRawFunction` 绑定的导入函数 | `CompileRawFunction` 中 `io_function->module = io_module` | `m3_compile.c#L2231` |
+| **未绑定的导入函数** | **始终为 NULL** | `Module_AddFunction` 不设置此字段 |
+
+因此，如果模块 B 导入了模块 A 的函数，但没有通过 `m3_LinkRawFunction` 绑定，编译时会直接报 `m3Err_functionImportMissing` 错误。
+
+**要实现 Wasm 模块间的函数调用，必须由宿主 C 代码充当"桥梁"**：
 
 ```c
-// m3_env.c#L734 — m3_FindFunction
+// ★ Bridge pattern: Module B imports "A.get_value" → host C function → call Module A's export
+
+// Step 1: Find Module A's exported function
+IM3Function getValueFunc;
+m3_FindFunction(&getValueFunc, runtime, "get_value");  // searches all modules in runtime
+
+// Step 2: Write a C bridge function
+m3ApiRawFunction(bridge_get_value) {
+    m3ApiReturnType(int32_t);
+    // Re-enter wasm3 to call Module A's function
+    m3_CallV(getValueFunc);
+    int32_t result;
+    m3_GetResultsV(getValueFunc, &result);
+    m3ApiReturn(result);
+}
+
+// Step 3: Link the bridge to Module B's import
+m3_LinkRawFunction(moduleB, "A", "get_value", "i()", bridge_get_value);
+```
+
+**`m3_FindFunction` 的真正用途**是给宿主 C 代码调用 Wasm 函数，而非 Wasm 模块间自动链接：
+
+```c
+// m3_env.c#L734 — m3_FindFunction: host API to find an exported function
 M3Result  m3_FindFunction  (IM3Function * o_function, IM3Runtime i_runtime,
                             const char * const i_functionName)
 {
@@ -1614,7 +1666,7 @@ M3Result  m3_FindFunction  (IM3Function * o_function, IM3Runtime i_runtime,
     // ...
 }
 
-// m3_env.c#L702 — v_FindFunction: search within one module
+// v_FindFunction: search within one module for exported/named functions
 void *  v_FindFunction  (IM3Module i_module, const char * const i_name)
 {
     // 1. Prefer exported functions (by export_name)
@@ -1623,21 +1675,23 @@ void *  v_FindFunction  (IM3Module i_module, const char * const i_name)
         if (f->export_name and strcmp (f->export_name, i_name) == 0)
             return f;
     }
-
     // 2. Fallback: search internal functions (by debug names)
-    for (u32 i = 0; i < i_module->numFunctions; ++i) {
-        IM3Function f = & i_module->functions [i];
-        if (f->import.moduleUtf8) continue;  // skip imports
-        for (int j = 0; j < f->numNames; j++) {
-            if (f->names[j] and strcmp (f->names[j], i_name) == 0)
-                return f;
-        }
-    }
-    return NULL;
+    // ...
 }
 ```
 
-**注意**：wasm3 的 `Compile_Call` 在编译 `call` 指令时，通过 `Module_GetFunction` 按索引获取函数。如果该索引指向一个导入函数，且该导入函数已经被链接（`function->compiled != NULL`），则直接发射 `op_Call` 跳转到其编译后的代码。这意味着**跨模块调用和本模块内调用在运行时没有任何额外开销**——都是同样的 `op_Call` + 函数指针。
+`m3_FindFunction` 遍历 runtime 中所有模块的导出函数，但这个 API 只能从 C 代码调用，不会被 Wasm 的 `call` 指令自动使用。
+
+**总结**：wasm3 中 Wasm 模块间的函数调用链路为：
+
+```
+Module B (call $imported_func)
+    → m3_LinkRawFunction 绑定的 C 桥接函数
+        → m3_FindFunction + m3_CallV 调用 Module A 的导出函数
+            → Module A (exported function body)
+```
+
+这与完整的 Wasm 运行时（如 wasmtime、wasmer）不同——后者会在实例化时自动解析 Wasm-to-Wasm 的导入，而 wasm3 作为轻量级解释器，将这个责任交给了宿主。
 
 ### 9.4 线性内存共享
 
@@ -1818,35 +1872,58 @@ m3_LoadModule(runtime, moduleB);
 // → InitMemory skips allocation (memoryImported == true)
 // → Module B uses the same runtime->memory as Module A
 
-// 4. Link Module B's function import to Module A's export
-// (wasm3 doesn't auto-resolve Wasm-to-Wasm imports;
-//  the host must bridge them, or use m3_LinkRawFunction)
-IM3Function getValueFunc;
-m3_FindFunction(&getValueFunc, runtime, "get_value");  // found in Module A
+// 4. ★ Link Module B's function import — must use host C bridge!
+//    wasm3 does NOT auto-resolve Wasm-to-Wasm imports.
+//    We need a C function to bridge Module B's import to Module A's export.
+
+static IM3Function g_getValueFunc = NULL;
+
+m3ApiRawFunction(bridge_get_value) {
+    m3ApiReturnType(int32_t);
+    // Re-enter wasm3 interpreter to call Module A's exported function
+    m3_CallV(g_getValueFunc);
+    int32_t result;
+    m3_GetResultsV(g_getValueFunc, &result);
+    m3ApiReturn(result);
+}
+
+// Find Module A's export (host API, not Wasm-to-Wasm)
+m3_FindFunction(&g_getValueFunc, runtime, "get_value");
+
+// Bind the bridge to Module B's import slot
+m3_LinkRawFunction(moduleB, "A", "get_value", "i()", bridge_get_value);
+// → CompileRawFunction sets func->module and func->compiled
+// → Now Module B's call $get will go through: op_CallRawFunction → bridge → m3_CallV → Module A
 
 // 5. Call Module B's "main"
 IM3Function mainFunc;
 m3_FindFunction(&mainFunc, runtime, "main");
 m3_CallV(mainFunc);
-// → Module B writes 42 to shared memory
-// → Module B calls get_value (Module A reads 42 from same memory)
+// → Module B writes 42 to shared memory (direct memory access, no bridge needed)
+// → Module B calls $get → bridge_get_value → Module A reads 42 from same memory
 // → Returns 42
 ```
 
 ```
-Runtime Memory Layout:
-┌──────────────────────────────────────────────────────┐
-│                    M3Runtime                         │
-│                                                      │
-│  modules: → [Module B] → [Module A] → NULL           │
-│                                                      │
-│  memory:  [Header | 0x2A000000 ... ]                 │
-│            ↑                                         │
-│            Both modules' load/store ops              │
-│            access this same memory via _mem          │
-│                                                      │
-│  stack:   [unified value + call stack]               │
-└──────────────────────────────────────────────────────┘
+Runtime Layout:
+┌──────────────────────────────────────────────────────────────┐
+│                        M3Runtime                             │
+│                                                              │
+│  modules: → [Module B] ──→ [Module A] ──→ NULL               │
+│              │                │                               │
+│              │ call $get      │ get_value()                   │
+│              │    ↓           │    ↑                          │
+│              │ op_CallRaw ────┼──→ bridge_get_value() (C)     │
+│              │ Function       │    → m3_CallV(get_value)      │
+│              │                │    → op_Call → Module A code   │
+│              │                │                               │
+│  memory:  [Header | 0x2A000000 ... ]                         │
+│            ↑                                                 │
+│            Both modules' load/store ops                      │
+│            access this same memory via _mem (no bridge needed)│
+│                                                              │
+│  stack:   [unified value + call stack]                       │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
